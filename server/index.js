@@ -10,17 +10,21 @@ app.use(express.json())
 
 const TL_CLIENT_ID = process.env.TRUELAYER_CLIENT_ID
 const TL_CLIENT_SECRET = process.env.TRUELAYER_CLIENT_SECRET
-const TL_REDIRECT_URI = 'http://localhost:5173/callback'
+const TL_REDIRECT_URI = 'http://localhost:3000/callback'
+const FRONTEND_URL = 'http://localhost:5173'
 
 // Step 1: Redirect user to TrueLayer to connect their bank
 app.get('/api/connect', (req, res) => {
-  const authUrl = `https://auth.truelayer-sandbox.com/?response_type=code&client_id=${TL_CLIENT_ID}&redirect_uri=${encodeURIComponent(TL_REDIRECT_URI)}&scope=accounts%20balance%20transactions&providers=uk-ob-all`
+  const nonce = Math.random().toString(36).substring(2)
+  const state = Math.random().toString(36).substring(2)
+  const authUrl = `https://auth.truelayer-sandbox.com/?response_type=code&client_id=${TL_CLIENT_ID}&redirect_uri=${encodeURIComponent(TL_REDIRECT_URI)}&scope=info%20accounts%20balance%20transactions&nonce=${nonce}&state=${state}&providers=mock`
   res.json({ url: authUrl })
 })
 
-// Step 2: Exchange the code for an access token
-app.post('/api/callback', async (req, res) => {
-  const { code } = req.body
+// Step 2: TrueLayer redirects here — exchange code for token, then send to frontend
+app.get('/callback', async (req, res) => {
+  const { code } = req.query
+  if (!code) return res.redirect(`${FRONTEND_URL}?tl_error=no_code`)
   try {
     const response = await fetch('https://auth.truelayer-sandbox.com/connect/token', {
       method: 'POST',
@@ -34,9 +38,13 @@ app.post('/api/callback', async (req, res) => {
       }),
     })
     const data = await response.json()
-    res.json(data)
+    if (data.access_token) {
+      res.redirect(`${FRONTEND_URL}?tl_token=${encodeURIComponent(data.access_token)}`)
+    } else {
+      res.redirect(`${FRONTEND_URL}?tl_error=${encodeURIComponent(JSON.stringify(data))}`)
+    }
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    res.redirect(`${FRONTEND_URL}?tl_error=${encodeURIComponent(err.message)}`)
   }
 })
 
@@ -84,7 +92,7 @@ app.get('/api/accounts/:id/balance', async (req, res) => {
   }
 })
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })

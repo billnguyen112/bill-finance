@@ -258,24 +258,17 @@ export default function Dashboard() {
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState(null);
 
-  // Handle OAuth callback
+  // Handle OAuth callback — token comes back from Express server via redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    if (code && !tlToken) {
-      setBankLoading(true);
-      window.history.replaceState({}, "", window.location.pathname);
-      exchangeCode(code)
-        .then((data) => {
-          if (data.access_token) {
-            localStorage.setItem("tl_token", data.access_token);
-            setTlToken(data.access_token);
-          } else {
-            setBankError("Failed to get access token");
-          }
-        })
-        .catch((err) => setBankError(err.message))
-        .finally(() => setBankLoading(false));
+    const token = params.get("tl_token");
+    const error = params.get("tl_error");
+    window.history.replaceState({}, "", window.location.pathname);
+    if (token) {
+      localStorage.setItem("tl_token", token);
+      setTlToken(token);
+    } else if (error) {
+      setBankError(error);
     }
   }, []);
 
