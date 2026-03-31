@@ -92,9 +92,11 @@ app.get('/api/cards/:id/balance', async (req, res) => {
 
 app.get('/api/cards/:id/transactions', async (req, res) => {
   const token = req.headers.authorization
+  const from = req.query.from || new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0]
+  const to = req.query.to || new Date().toISOString().split('T')[0]
   try {
     const response = await fetch(
-      `https://api.truelayer.com/data/v1/cards/${req.params.id}/transactions`,
+      `https://api.truelayer.com/data/v1/cards/${req.params.id}/transactions?from=${from}&to=${to}`,
       { headers: { Authorization: token } }
     )
     const data = await response.json()
@@ -104,12 +106,14 @@ app.get('/api/cards/:id/transactions', async (req, res) => {
   }
 })
 
-// Step 4: Fetch transactions for an account
+// Step 4: Fetch transactions for an account (with date range)
 app.get('/api/accounts/:id/transactions', async (req, res) => {
   const token = req.headers.authorization
+  const from = req.query.from || new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0]
+  const to = req.query.to || new Date().toISOString().split('T')[0]
   try {
     const response = await fetch(
-      `https://api.truelayer.com/data/v1/accounts/${req.params.id}/transactions`,
+      `https://api.truelayer.com/data/v1/accounts/${req.params.id}/transactions?from=${from}&to=${to}`,
       { headers: { Authorization: token } }
     )
     const data = await response.json()

@@ -235,7 +235,8 @@ const CATEGORY_RULES = [
   { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air/i, categoryId: "work_travel" },
   // Income
   { pattern: /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance/i, categoryId: "income" },
-  // Investments (BEFORE transfers — seedrs, T212, IBKR deposits are investments not transfers)
+  // Investments (BEFORE transfers — T212, IBKR deposits are investments not transfers)
+  // NOTE: only matches negative amounts via categorize() logic below
   { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube/i, categoryId: "investment" },
   // Transfers (net-zero moves between own accounts)
   { pattern: /transfer|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|internal|between\s*accounts|moving\s*money|hsbc\s*save|current\s*account|savings\s*account|wise\b.*gbp|wise\b.*eur|wise\b.*usd|chase\b.*account|standing\s*order/i, categoryId: "transfer" },
@@ -244,9 +245,14 @@ const CATEGORY_RULES = [
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
 
-  // Check keyword rules FIRST (works for both positive and negative amounts)
+  // Check keyword rules FIRST
   for (const rule of CATEGORY_RULES) {
-    if (rule.pattern.test(text)) return rule.categoryId;
+    if (rule.pattern.test(text)) {
+      // Investment/transfer platforms: positive = income (withdrawal/return), negative = investment/transfer
+      if (rule.categoryId === "investment" && amount > 0) return "income";
+      if (rule.categoryId === "transfer" && amount > 0) return "transfer"; // incoming transfer stays transfer
+      return rule.categoryId;
+    }
   }
 
   // TrueLayer category-based fallback
@@ -263,9 +269,12 @@ function categorize(merchantName, description, tlCategory, amount) {
 // ── TrueLayer helpers ────────────────────────────────
 function mapTx(tx, accountName) {
   const amount = tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
+  const ts = new Date(tx.timestamp);
   return {
     id: `tl_${tx.transaction_id}`,
-    date: new Date(tx.timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    date: ts.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    fullDate: ts.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
+    timestamp: ts.getTime(),
     merchant: tx.merchant_name || tx.description || "Unknown",
     amount,
     categoryId: categorize(tx.merchant_name, tx.description, tx.transaction_category, amount),
@@ -360,6 +369,7 @@ export default function Dashboard() {
   const [showPeriodPicker, setShowPeriodPicker] = useState(false);
   const [showAccountFilter, setShowAccountFilter] = useState(false);
   const [selectedAccounts, setSelectedAccounts] = useState(() => JSON.parse(localStorage.getItem("selected_accounts") || "null"));
+  const [drillCategory, setDrillCategory] = useState(null); // category id to drill into
 
   // Handle OAuth callback — token comes back from Express server via redirect
   useEffect(() => {
@@ -389,7 +399,13 @@ export default function Dashboard() {
     for (const token of tlTokens) {
       try {
         // Fetch current/savings accounts
-        const accountsRes = await fetchAccounts(token);
+        let accountsRes;
+        try { accountsRes = await fetchAccounts(token); } catch { accountsRes = {}; }
+        // Detect expired/invalid tokens
+        if (accountsRes.error || accountsRes.status === "Failed") {
+          console.warn("Token expired or invalid:", accountsRes.error);
+          continue;
+        }
         const accounts = accountsRes.results || [];
         for (const acc of accounts) {
           try {
@@ -404,7 +420,8 @@ export default function Dashboard() {
         }
 
         // Fetch credit cards
-        const cardsRes = await fetchCards(token);
+        let cardsRes;
+        try { cardsRes = await fetchCards(token); } catch { cardsRes = {}; }
         const cards = cardsRes.results || [];
         for (const card of cards) {
           try {
@@ -425,10 +442,18 @@ export default function Dashboard() {
           } catch { /* skip */ }
         }
       } catch (err) {
+        console.warn("Bank data load error:", err.message);
         if (err.message?.includes("401")) {
           setTlTokens((prev) => { const updated = prev.filter((t) => t !== token); localStorage.setItem("tl_tokens", JSON.stringify(updated)); return updated; });
         }
       }
+    }
+
+    // Sort by timestamp newest first
+    allTxns.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    if (allAccounts.length === 0 && tlTokens.length > 0) {
+      setBankError("Bank connections expired. Disconnect and reconnect your banks.");
     }
 
     setTlAccounts(allAccounts);
@@ -473,13 +498,6 @@ export default function Dashboard() {
   const totalInvested = mergedAccounts.filter((a) => ["Brokerage", "ISA", "Private Equity", "Crypto"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
   const totalCash = mergedAccounts.filter((a) => a.type === "Bank").reduce((s, a) => s + a.balance, 0);
 
-  const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
-  const spending = useMemo(() => periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [periodTransactions]);
-  const netFlow = income - spending;
-  const savingsRate = income > 0 ? Math.round(((income - spending) / income) * 100) : 0;
-
-  MONTHLY_SAVINGS[MONTHLY_SAVINGS.length - 1].rate = savingsRate;
-
   // Parse date helper for filtering
   const parseTxDate = (d) => {
     const parts = d.split(" ");
@@ -503,6 +521,13 @@ export default function Dashboard() {
   const periodTransactions = useMemo(() => {
     return allTransactions.filter((t) => parseTxDate(t.date) >= budgetCutoff);
   }, [allTransactions, budgetCutoff]);
+
+  const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
+  const spending = useMemo(() => periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [periodTransactions]);
+  const netFlow = income - spending;
+  const savingsRate = income > 0 ? Math.round(((income - spending) / income) * 100) : 0;
+
+  MONTHLY_SAVINGS[MONTHLY_SAVINGS.length - 1].rate = savingsRate;
 
   const categorySpending = useMemo(() => {
     const map = {};
@@ -1001,7 +1026,7 @@ export default function Dashboard() {
               const left = budget - spent;
               if (!editingBudget && budget === 0 && spent === 0) return null;
               return (
-                <div key={cat.id} style={{ padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div key={cat.id} onClick={() => !editingBudget && spent > 0 && setDrillCategory(cat.id)} style={{ padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: spent > 0 && !editingBudget ? "pointer" : "default" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
                     <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
                     <div style={{ flex: 1 }}>
@@ -1183,13 +1208,16 @@ export default function Dashboard() {
                 const data = catMap[cat.id];
                 const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
                 return (
-                  <div key={cat.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                  <div key={cat.id} onClick={() => setDrillCategory(cat.id)} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: "pointer" }}>
                     <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
                     <div style={{ flex: 1, marginLeft: 12 }}>
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{cat.label}</div>
                       <div style={{ fontSize: 12, color: "#71717a" }}>{data.count} Transaction{data.count !== 1 ? "s" : ""}</div>
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
+                      <span style={{ color: "#52525b", fontSize: 12 }}>{"\u203A"}</span>
+                    </div>
                   </div>
                 );
               })}
@@ -1319,6 +1347,51 @@ export default function Dashboard() {
                 style={{ width: "100%", padding: "14px", marginTop: 16, background: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: "none", borderRadius: 12, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
                 Save
               </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Category drill-down modal */}
+      {drillCategory && (() => {
+        const cat = getCat(drillCategory);
+        const catTxns = periodTransactions.filter((t) => t.categoryId === drillCategory);
+        const catTotal = catTxns.reduce((s, t) => s + t.amount, 0);
+        const budget = getBudget(drillCategory);
+        return (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+            <div onClick={() => setDrillCategory(null)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+            <div style={{ position: "relative", width: "100%", maxWidth: 430, background: "#1a1a2e", borderRadius: "20px 20px 0 0", padding: "20px 24px 32px", maxHeight: "80vh", overflowY: "auto" }}>
+              <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 16px" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>{cat.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{cat.label}</div>
+                  <div style={{ fontSize: 14, color: "#71717a" }}>{catTxns.length} transaction{catTxns.length !== 1 ? "s" : ""}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: catTotal >= 0 ? "#34d399" : "#e4e4e7" }}>{catTotal >= 0 ? "+" : "-"}{"\u00A3"}{Math.abs(catTotal).toFixed(2)}</div>
+                  {budget > 0 && <div style={{ fontSize: 12, color: Math.abs(catTotal) > budget ? "#ef4444" : "#71717a" }}>of {"\u00A3"}{budget} budget</div>}
+                </div>
+              </div>
+              {budget > 0 && (
+                <div style={{ marginBottom: 16, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3 }}>
+                  <div style={{ width: `${Math.min((Math.abs(catTotal) / budget) * 100, 100)}%`, height: "100%", background: Math.abs(catTotal) > budget ? "#ef4444" : cat.color, borderRadius: 3 }} />
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {catTxns.map((tx) => (
+                  <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
+                      <div style={{ fontSize: 12, color: "#52525b" }}>{tx.fullDate || tx.date}{tx.accountName ? ` \u00B7 ${tx.accountName}` : ""}</div>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7", flexShrink: 0 }}>
+                      {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{Math.abs(tx.amount).toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );
