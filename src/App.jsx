@@ -276,35 +276,45 @@ const MERCHANT_LOGOS = {
 // Cache for broken logo URLs to avoid retrying
 const brokenLogos = new Set();
 
-// Clean up messy TrueLayer merchant names for display and logo matching
+// Clean up messy TrueLayer merchant names for display
 function cleanMerchantName(raw) {
   if (!raw) return raw;
   let name = raw;
-  // Remove card numbers, reference numbers, country codes
-  name = name.replace(/\b(VSA?\d{6,}[\d*]+\S*)/gi, ""); // VISA card numbers
-  name = name.replace(/\b\d{6,}\b/g, ""); // long number sequences
-  name = name.replace(/\s*(GB|IE|US|UK|FR|DE|NL|LU|CH)\s*$/i, ""); // country codes at end
+  // Remove card numbers and references
+  name = name.replace(/\b(VSA?\d{4,}[\d*]*\S*)/gi, ""); // VISA card numbers
+  name = name.replace(/\b[A-Z]?\d{8,}\b/g, ""); // long reference numbers
+  name = name.replace(/\s*(GB|IE|US|UK|FR|DE|NL|LU|CH)\s*$/i, ""); // trailing country codes
   name = name.replace(/\s*(CD|CP)\s+\d+/gi, ""); // CD/CP references
   name = name.replace(/\*+/g, ""); // asterisks
-  name = name.replace(/\s{2,}/g, " ").trim(); // collapse whitespace
-  return name;
+  name = name.replace(/\s*\/\s*(CP|CD|CF)\s*/gi, " "); // /CP /CD suffixes
+  name = name.replace(/\s+CH\s+/gi, " "); // " CH " (charge indicator)
+  name = name.replace(/Lim\d+$/i, ""); // "Lim42165300" suffixes
+  name = name.replace(/\s{2,}/g, " ").trim();
+  // Title case if all uppercase
+  if (name === name.toUpperCase() && name.length > 3) {
+    name = name.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+  return name || raw;
 }
 
-function getMerchantLogo(merchantName) {
-  if (!merchantName) return null;
-  const lower = merchantName.toLowerCase();
-  // Also try to extract domain from merchant name (e.g., "APPLE.COM/BILL" → apple.com)
-  const domainMatch = lower.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
+function getMerchantLogo(merchantName, rawMerchant) {
+  if (!merchantName && !rawMerchant) return null;
+  // Try matching against both cleaned name and raw name
+  const texts = [merchantName, rawMerchant].filter(Boolean).map(t => t.toLowerCase());
 
-  for (const [key, domain] of Object.entries(MERCHANT_LOGOS)) {
-    if (lower.includes(key)) {
-      const url = `https://logo.clearbit.com/${domain}?size=80`;
-      if (brokenLogos.has(url)) return null;
-      return url;
+  for (const text of texts) {
+    for (const [key, domain] of Object.entries(MERCHANT_LOGOS)) {
+      if (text.includes(key)) {
+        const url = `https://logo.clearbit.com/${domain}?size=80`;
+        if (brokenLogos.has(url)) return null;
+        return url;
+      }
     }
   }
 
-  // Try extracted domain directly
+  // Try to extract domain from raw text (e.g., "APPLE.COM/BILL" → apple.com)
+  const raw = (rawMerchant || merchantName || "").toLowerCase();
+  const domainMatch = raw.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
   if (domainMatch) {
     const url = `https://logo.clearbit.com/${domainMatch[1]}?size=80`;
     if (!brokenLogos.has(url)) return url;
@@ -313,15 +323,15 @@ function getMerchantLogo(merchantName) {
   return null;
 }
 
-// Logo component with fallback to category icon
-function MerchantIcon({ merchant, categoryId, size = 40 }) {
+// Logo component with fallback
+function MerchantIcon({ merchant, rawMerchant, categoryId, size = 40 }) {
   const [imgError, setImgError] = useState(false);
-  const logoUrl = useMemo(() => getMerchantLogo(merchant), [merchant]);
+  const logoUrl = useMemo(() => getMerchantLogo(merchant, rawMerchant), [merchant, rawMerchant]);
   const cat = getCat(categoryId);
 
   if (logoUrl && !imgError) {
     return (
-      <div style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", flexShrink: 0, background: "#1a1a2e" }}>
+      <div style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", flexShrink: 0, background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.06)" }}>
         <img
           src={logoUrl}
           alt=""
@@ -335,14 +345,14 @@ function MerchantIcon({ merchant, categoryId, size = 40 }) {
     );
   }
 
-  // Fallback: colored circle with first letter (like real fintech apps)
-  const initial = (merchant || "?").charAt(0).toUpperCase();
+  // Fallback: colored circle with first letter
+  const initial = (merchant || "?").replace(/^[^a-zA-Z]*/, "").charAt(0).toUpperCase() || "?";
   return (
     <div style={{
       width: size, height: size, borderRadius: size / 2, flexShrink: 0,
-      background: `${cat.color}18`,
+      background: `${cat.color}15`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.42, fontWeight: 700, color: cat.color,
+      fontSize: size * 0.4, fontWeight: 700, color: cat.color,
     }}>
       {initial}
     </div>
@@ -385,7 +395,7 @@ const SPENDING_RULES = [
 ];
 
 // Income patterns
-const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance|seedrs|crowdcube|republic|bonus|commission|reward|compensation|settlement/i;
+const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance|seedrs|spendesk|crowdcube|republic|bonus|commission|reward|compensation|settlement/i;
 
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
@@ -1027,7 +1037,7 @@ export default function Dashboard() {
                     const cat = getCat(tx.categoryId);
                     return (
                       <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < group.txns.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                        <MerchantIcon merchant={tx.merchant} categoryId={tx.categoryId} size={40} />
+                        <MerchantIcon merchant={tx.merchant} rawMerchant={tx.rawMerchant} categoryId={tx.categoryId} size={40} />
                         <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -1654,7 +1664,7 @@ export default function Dashboard() {
                 <div style={{ fontSize: 12, color: "#52525b", fontWeight: 500, padding: "10px 0 6px" }}>{formatDateHeader(date)}</div>
                 {txns.map((tx) => (
                   <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "11px 0", borderBottom: "1px solid rgba(255,255,255,0.03)", gap: 10 }}>
-                    <MerchantIcon merchant={tx.merchant} categoryId={tx.categoryId} size={34} />
+                    <MerchantIcon merchant={tx.merchant} rawMerchant={tx.rawMerchant} categoryId={tx.categoryId} size={36} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
                       <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 2 }}>{tx.accountName || ""}</div>
