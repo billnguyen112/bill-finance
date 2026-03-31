@@ -305,7 +305,7 @@ function getMerchantLogo(merchantName, rawMerchant) {
   for (const text of texts) {
     for (const [key, domain] of Object.entries(MERCHANT_LOGOS)) {
       if (text.includes(key)) {
-        const url = `https://logo.clearbit.com/${domain}?size=80`;
+        const url = `https://icon.horse/icon/${domain}?size=80`;
         if (brokenLogos.has(url)) return null;
         return url;
       }
@@ -316,36 +316,48 @@ function getMerchantLogo(merchantName, rawMerchant) {
   const raw = (rawMerchant || merchantName || "").toLowerCase();
   const domainMatch = raw.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
   if (domainMatch) {
-    const url = `https://logo.clearbit.com/${domainMatch[1]}?size=80`;
+    const url = `https://icon.horse/icon/${domainMatch[1]}`;
     if (!brokenLogos.has(url)) return url;
   }
 
   return null;
 }
 
-// Logo component with fallback
+// Logo component with fallback chain: icon.horse → Google favicon → letter
 function MerchantIcon({ merchant, rawMerchant, categoryId, size = 40 }) {
-  const [imgError, setImgError] = useState(false);
+  const [errorCount, setErrorCount] = useState(0);
   const logoUrl = useMemo(() => getMerchantLogo(merchant, rawMerchant), [merchant, rawMerchant]);
   const cat = getCat(categoryId);
 
-  if (logoUrl && !imgError) {
+  // Extract domain for Google favicon fallback
+  const domain = useMemo(() => {
+    if (!logoUrl) return null;
+    const m = logoUrl.match(/icon\.horse\/icon\/([^?]+)/);
+    return m ? m[1] : null;
+  }, [logoUrl]);
+
+  const googleFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
+
+  // errorCount: 0 = try icon.horse, 1 = try google favicon, 2 = show letter
+  const currentUrl = errorCount === 0 ? logoUrl : errorCount === 1 ? googleFavicon : null;
+
+  if (currentUrl) {
     return (
       <div style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", flexShrink: 0, background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.06)" }}>
         <img
-          src={logoUrl}
+          src={currentUrl}
           alt=""
           width={size}
           height={size}
           style={{ objectFit: "cover", display: "block" }}
-          onError={() => { brokenLogos.add(logoUrl); setImgError(true); }}
+          onError={() => setErrorCount(c => c + 1)}
           loading="lazy"
         />
       </div>
     );
   }
 
-  // Fallback: colored circle with first letter
+  // Final fallback: colored circle with first letter
   const initial = (merchant || "?").replace(/^[^a-zA-Z]*/, "").charAt(0).toUpperCase() || "?";
   return (
     <div style={{
