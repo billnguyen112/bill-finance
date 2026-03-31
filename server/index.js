@@ -17,7 +17,7 @@ const FRONTEND_URL = 'http://localhost:5173'
 app.get('/api/connect', (req, res) => {
   const nonce = Math.random().toString(36).substring(2)
   const state = Math.random().toString(36).substring(2)
-  const authUrl = `https://auth.truelayer-sandbox.com/?response_type=code&client_id=${TL_CLIENT_ID}&redirect_uri=${encodeURIComponent(TL_REDIRECT_URI)}&scope=info%20accounts%20balance%20transactions&nonce=${nonce}&state=${state}&providers=mock`
+  const authUrl = `https://auth.truelayer.com/?response_type=code&client_id=${TL_CLIENT_ID}&redirect_uri=${encodeURIComponent(TL_REDIRECT_URI)}&scope=info%20accounts%20balance%20transactions%20cards&nonce=${nonce}&state=${state}&providers=uk-ob-all%20uk-oauth-all`
   res.json({ url: authUrl })
 })
 
@@ -26,7 +26,7 @@ app.get('/callback', async (req, res) => {
   const { code } = req.query
   if (!code) return res.redirect(`${FRONTEND_URL}?tl_error=no_code`)
   try {
-    const response = await fetch('https://auth.truelayer-sandbox.com/connect/token', {
+    const response = await fetch('https://auth.truelayer.com/connect/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -52,9 +52,51 @@ app.get('/callback', async (req, res) => {
 app.get('/api/accounts', async (req, res) => {
   const token = req.headers.authorization
   try {
-    const response = await fetch('https://api.truelayer-sandbox.com/data/v1/accounts', {
+    const response = await fetch('https://api.truelayer.com/data/v1/accounts', {
       headers: { Authorization: token },
     })
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Fetch credit cards
+app.get('/api/cards', async (req, res) => {
+  const token = req.headers.authorization
+  try {
+    const response = await fetch('https://api.truelayer.com/data/v1/cards', {
+      headers: { Authorization: token },
+    })
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/cards/:id/balance', async (req, res) => {
+  const token = req.headers.authorization
+  try {
+    const response = await fetch(
+      `https://api.truelayer.com/data/v1/cards/${req.params.id}/balance`,
+      { headers: { Authorization: token } }
+    )
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+app.get('/api/cards/:id/transactions', async (req, res) => {
+  const token = req.headers.authorization
+  try {
+    const response = await fetch(
+      `https://api.truelayer.com/data/v1/cards/${req.params.id}/transactions`,
+      { headers: { Authorization: token } }
+    )
     const data = await response.json()
     res.json(data)
   } catch (err) {
@@ -67,7 +109,7 @@ app.get('/api/accounts/:id/transactions', async (req, res) => {
   const token = req.headers.authorization
   try {
     const response = await fetch(
-      `https://api.truelayer-sandbox.com/data/v1/accounts/${req.params.id}/transactions`,
+      `https://api.truelayer.com/data/v1/accounts/${req.params.id}/transactions`,
       { headers: { Authorization: token } }
     )
     const data = await response.json()
@@ -82,7 +124,7 @@ app.get('/api/accounts/:id/balance', async (req, res) => {
   const token = req.headers.authorization
   try {
     const response = await fetch(
-      `https://api.truelayer-sandbox.com/data/v1/accounts/${req.params.id}/balance`,
+      `https://api.truelayer.com/data/v1/accounts/${req.params.id}/balance`,
       { headers: { Authorization: token } }
     )
     const data = await response.json()
