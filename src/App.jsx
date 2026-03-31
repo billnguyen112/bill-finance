@@ -223,15 +223,23 @@ const CATEGORY_RULES = [
   { pattern: /transfer|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|internal|between\s*accounts|moving\s*money|hsbc\s*save|current\s*account|savings\s*account|wise\b.*gbp|wise\b.*eur|wise\b.*usd|chase\b.*account|standing\s*order/i, categoryId: "transfer" },
 ];
 
+// Patterns that indicate REAL income (not inter-account transfers)
+const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance|seedrs|crowdcube|republic|bonus|commission|reward/i;
+
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
 
-  // ── POSITIVE amounts (money IN) → always "income" ──
-  // Never classify incoming money as "transfer" — even if TrueLayer says TRANSFER.
-  // Many UK banks report salary, Seedrs returns, refunds etc. as TRANSFER category.
-  // Internal transfers cancel out naturally (credit in one account = debit in another).
+  // ── POSITIVE amounts (money IN) ──
+  // Default: treat as "transfer" (most credits are inter-account moves)
+  // Only mark as "income" if it matches known income sources
   if (amount > 0) {
-    return "income";
+    if (INCOME_PATTERN.test(text)) return "income";
+    // Check standard income rule from CATEGORY_RULES
+    for (const rule of CATEGORY_RULES) {
+      if (rule.pattern.test(text) && rule.categoryId === "income") return "income";
+    }
+    // Everything else positive = transfer (user can override manually)
+    return "transfer";
   }
 
   // ── NEGATIVE amounts (money OUT) → categorize normally ──
