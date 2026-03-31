@@ -353,6 +353,12 @@ export default function Dashboard() {
   const [customDateTo, setCustomDateTo] = useState("");
   const [recurring, setRecurring] = useState(() => JSON.parse(localStorage.getItem("recurring_items") || "null") || DEFAULT_RECURRING);
   const [editingRecurring, setEditingRecurring] = useState(null);
+  const [txSearch, setTxSearch] = useState("");
+  const [budgetView, setBudgetView] = useState("category"); // category or merchant
+  const [analyticsView, setAnalyticsView] = useState("category"); // category or merchant
+  const [showPeriodPicker, setShowPeriodPicker] = useState(false);
+  const [showAccountFilter, setShowAccountFilter] = useState(false);
+  const [selectedAccounts, setSelectedAccounts] = useState(() => JSON.parse(localStorage.getItem("selected_accounts") || "null"));
 
   // Handle OAuth callback — token comes back from Express server via redirect
   useEffect(() => {
@@ -466,8 +472,7 @@ export default function Dashboard() {
   const totalInvested = mergedAccounts.filter((a) => ["Brokerage", "ISA", "Private Equity", "Crypto"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
   const totalCash = mergedAccounts.filter((a) => a.type === "Bank").reduce((s, a) => s + a.balance, 0);
 
-  const NEUTRAL_CATS = ["transfer", "investment"]; // these net out, excluded from both income and spending
-  const income = useMemo(() => allTransactions.filter((t) => t.amount > 0 && !NEUTRAL_CATS.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [allTransactions]);
+  const income = useMemo(() => allTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [allTransactions]);
   const spending = useMemo(() => allTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [allTransactions]);
   const netFlow = income - spending;
   const savingsRate = income > 0 ? Math.round(((income - spending) / income) * 100) : 0;
@@ -781,79 +786,127 @@ export default function Dashboard() {
       )}
 
       {/* ═══ TRANSACTIONS ═══ */}
-      {activeTab === "transactions" && (
+      {activeTab === "transactions" && (() => {
+        const filtered = allTransactions.filter((t) => {
+          if (txSearch && !t.merchant.toLowerCase().includes(txSearch.toLowerCase())) return false;
+          if (selectedAccounts && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
+          return true;
+        });
+        // Group by date
+        const groups = {};
+        filtered.forEach((t) => {
+          const key = t.date;
+          if (!groups[key]) groups[key] = { txns: [], total: 0 };
+          groups[key].txns.push(t);
+          groups[key].total += t.amount;
+        });
+        const dateKeys = Object.keys(groups);
+
+        return (
         <div style={{ padding: "0 20px" }}>
-          {allTransactions.some((t) => t.pending) && (
-            <>
-              <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between" }}>
-                <span>PENDING</span>
-                <span style={{ color: "#ef4444" }}>-{"\u00A3"}{allTransactions.filter((t) => t.pending && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(2)}</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {allTransactions.filter((t) => t.pending).map((tx) => {
-                  const cat = getCat(tx.categoryId);
-                  return (
-                    <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: 20 }}>{cat.icon}</span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
-                          <button onClick={() => setEditingTx(tx.id)} style={{ fontSize: 11, color: cat.color, background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>{cat.label} <span style={{ fontSize: 9 }}>{"\u270E"}</span></button>
+          {/* Search + filter */}
+          <div style={{ display: "flex", gap: 8, marginTop: 20, marginBottom: 16 }}>
+            <div style={{ flex: 1, position: "relative" }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#52525b", fontSize: 14 }}>{"\u{1F50D}"}</span>
+              <input placeholder="Search" value={txSearch} onChange={(e) => setTxSearch(e.target.value)}
+                style={{ width: "100%", padding: "10px 10px 10px 36px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#e4e4e7", fontSize: 13 }} />
+            </div>
+            <button onClick={() => setShowAccountFilter(true)}
+              style={{ padding: "10px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#818cf8", fontSize: 14, cursor: "pointer" }}>
+              {"\u{1F3E6}"}
+            </button>
+          </div>
+
+          {/* Transaction groups by date */}
+          {dateKeys.map((date) => {
+            const group = groups[date];
+            return (
+              <div key={date}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#818cf8" }}>{date}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: group.total >= 0 ? "#34d399" : "#e4e4e7" }}>
+                    {group.total >= 0 ? "+" : ""}{"\u00A3"}{Math.abs(group.total).toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  {group.txns.map((tx) => {
+                    const cat = getCat(tx.categoryId);
+                    return (
+                      <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                          {cat.icon}
+                        </div>
+                        <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
+                          <button onClick={() => setEditingTx(tx.id)}
+                            style={{ fontSize: 12, color: cat.color, background: "none", border: "none", padding: 0, cursor: "pointer", marginTop: 2 }}>
+                            {cat.label} {"\u270E"}
+                          </button>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7" }}>
+                            {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{Math.abs(tx.amount).toFixed(2)}
+                          </div>
+                          {tx.accountName && <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>{tx.accountName}</div>}
                         </div>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#e4e4e7", whiteSpace: "nowrap" }}>{"\u00A3"}{Math.abs(tx.amount).toFixed(2)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          <div style={sectionLabel}>SETTLED</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {allTransactions.filter((t) => !t.pending).map((tx) => {
-              const cat = getCat(tx.categoryId);
-              return (
-                <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 20 }}>{cat.icon}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 11, color: "#52525b" }}>{tx.date}</span>
-                        <button onClick={() => setEditingTx(tx.id)} style={{ fontSize: 11, color: cat.color, background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>{cat.label} <span style={{ fontSize: 9 }}>{"\u270E"}</span></button>
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7", whiteSpace: "nowrap" }}>{tx.amount >= 0 ? "+" : ""}{"\u00A3"}{Math.abs(tx.amount).toFixed(2)}</div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#52525b", fontSize: 13 }}>No transactions found</div>}
         </div>
-      )}
+        );
+      })()}
 
       {/* ═══ BUDGET ═══ */}
       {activeTab === "budget" && (
         <div style={{ padding: "0 20px" }}>
-          <div style={sectionLabel}>{budgetPeriod.start.toUpperCase()} {"\u2013"} {budgetPeriod.end.toUpperCase()}</div>
-          <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-            <DonutChart spent={variableSpend} committed={committedSpend} total={totalBudget} size={180} />
-            <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#818cf8" }} />
-                <div><div style={{ fontSize: 11, color: "#71717a" }}>Spending</div><div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{variableSpend.toFixed(2)}</div></div>
+          {/* Period badge */}
+          <div style={{ display: "inline-block", padding: "6px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 20, fontSize: 13, color: "#a1a1aa", margin: "20px 0 16px" }}>
+            {budgetPeriod.start} - {budgetPeriod.end}
+          </div>
+
+          {/* Donut + summary */}
+          <div style={{ ...card, padding: 24, marginBottom: 16, textAlign: "center" }}>
+            <DonutChart spent={discretionarySpend} committed={committedSpend} total={totalBudget} size={200} />
+            <div style={{ marginTop: 20 }}>
+              {discretionarySpend + committedSpend > totalBudget ? (
+                <>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#ef4444" }}>{"\u00A3"}{((discretionarySpend + committedSpend) - totalBudget).toFixed(2)}</div>
+                  <div style={{ fontSize: 12, color: "#71717a" }}>over your budget of {"\u00A3"}{totalBudget.toFixed(2)}</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#34d399" }}>{"\u00A3"}{(totalBudget - discretionarySpend - committedSpend).toFixed(2)}</div>
+                  <div style={{ fontSize: 12, color: "#71717a" }}>left of {"\u00A3"}{totalBudget.toFixed(2)} budget</div>
+                </>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 30, marginTop: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#818cf8" }} />
+                <div style={{ textAlign: "left" }}><div style={{ fontSize: 13, fontWeight: 600 }}>Spending</div><div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{discretionarySpend.toFixed(2)}</div></div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#c084fc" }} />
-                <div><div style={{ fontSize: 11, color: "#71717a" }}>Committed</div><div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{committedSpend.toFixed(2)}</div></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#c084fc" }} />
+                <div style={{ textAlign: "left" }}><div style={{ fontSize: 13, fontWeight: 600 }}>Committed</div><div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{committedSpend.toFixed(2)}</div></div>
               </div>
             </div>
           </div>
 
-          {/* Daily allowance */}
-          <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div><div style={{ fontSize: 14, fontWeight: 500 }}>Daily allowance</div><div style={{ fontSize: 11, color: "#71717a" }}>Until {budgetPeriod.end}</div></div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#34d399" }}>{"\u00A3"}{dailyAllowance.toFixed(2)}</div>
+          {/* Daily allowance card */}
+          <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>{"\u{1F4C5}"}</span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Daily allowance</div>
+                <div style={{ fontSize: 12, color: "#71717a" }}>Until {budgetPeriod.end} {"\u00B7"} {daysLeft} days left</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: dailyAllowance > 0 ? "#34d399" : "#ef4444" }}>{"\u00A3"}{dailyAllowance.toFixed(2)}</div>
           </div>
 
           {/* Recurring */}
@@ -862,27 +915,25 @@ export default function Dashboard() {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ color: "#a1a1aa", fontSize: 12 }}>{"\u00A3"}{recurringTotal.toFixed(2)}/mo</span>
               <button onClick={() => setEditingRecurring(editingRecurring === "all" ? null : "all")}
-                style={{ background: "none", border: "none", color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                style={{ background: "none", border: "none", color: "#818cf8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
                 {editingRecurring === "all" ? "Done" : "Edit"}
               </button>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 16 }}>
             {recurring.map((r) => {
               const cat = getCat(r.categoryId);
               return (
-                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-                    <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      {editingRecurring === "all" ? (
-                        <input defaultValue={r.merchant} onBlur={(e) => updateRecurringItem(r.id, "merchant", e.target.value)}
-                          style={{ width: "100%", padding: "2px 4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, color: "#e4e4e7", fontSize: 13 }} />
-                      ) : (
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{r.merchant}</div>
-                      )}
-                      <div style={{ fontSize: 11, color: "#52525b" }}>{r.frequency}{r.nextDate ? ` \u00B7 Next: ${r.nextDate}` : ""}</div>
-                    </div>
+                <div key={r.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                  <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+                    {editingRecurring === "all" ? (
+                      <input defaultValue={r.merchant} onBlur={(e) => updateRecurringItem(r.id, "merchant", e.target.value)}
+                        style={{ width: "100%", padding: "2px 4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, color: "#e4e4e7", fontSize: 14 }} />
+                    ) : (
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{r.merchant}</div>
+                    )}
+                    <div style={{ fontSize: 12, color: "#52525b", marginTop: 2 }}>{r.frequency}{r.nextDate ? ` \u00B7 Next: ${r.nextDate}` : ""}</div>
                   </div>
                   {editingRecurring === "all" ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -893,60 +944,63 @@ export default function Dashboard() {
                         style={{ background: "none", border: "none", color: "#ef4444", fontSize: 16, cursor: "pointer", padding: "0 4px" }}>{"\u2715"}</button>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{r.amount.toFixed(2)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{r.amount.toFixed(2)}</div>
                   )}
                 </div>
               );
             })}
             {editingRecurring === "all" && (
               <button onClick={addRecurringItem}
-                style={{ padding: "10px", background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 10, color: "#71717a", fontSize: 12, cursor: "pointer" }}>
+                style={{ padding: "12px", marginTop: 8, background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 10, color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
                 + Add recurring item
               </button>
             )}
           </div>
 
-          {/* Category budgets */}
+          {/* Category budgets — Emma style */}
           <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between" }}>
-            <span>CATEGORY BUDGETS</span>
+            <span style={{ color: "#818cf8" }}>Category budgets</span>
             <button onClick={() => setEditingBudget(editingBudget === "all" ? null : "all")}
-              style={{ background: "none", border: "none", color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
-              {editingBudget === "all" ? "Done" : "Edit"}
+              style={{ background: "none", border: "none", color: "#818cf8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
+              {editingBudget === "all" ? "Done" : "Edit \u25B6"}
             </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id)).map((cat) => {
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id)).sort((a, b) => (categorySpending[b.id]?.total || 0) - (categorySpending[a.id]?.total || 0)).map((cat) => {
               const budget = getBudget(cat.id);
               const spent = categorySpending[cat.id]?.total || 0;
               const isOver = budget > 0 && spent > budget;
               const left = budget - spent;
+              if (!editingBudget && budget === 0 && spent === 0) return null;
               return (
-                <div key={cat.id}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 16 }}>{cat.icon}</span>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</span>
+                <div key={cat.id} style={{ padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontSize: 14, fontWeight: 600 }}>{cat.label}</span>
+                        {editingBudget === "all" ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}</span>
+                            <input type="number" defaultValue={budget} onBlur={(e) => saveBudget(cat.id, e.target.value)}
+                              style={{ width: 70, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "#e4e4e7", fontSize: 14, fontWeight: 600, textAlign: "right" }} />
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 14, fontWeight: 600 }}>{spent > 0 ? `-\u00A3${spent.toFixed(2)}` : "\u00A30.00"}</span>
+                        )}
+                      </div>
+                      {budget > 0 && !editingBudget && (
+                        <div style={{ fontSize: 12, color: isOver ? "#ef4444" : "#71717a", marginTop: 2 }}>
+                          {isOver ? `\u00A3${(spent - budget).toFixed(2)} over your budget of \u00A3${budget.toFixed(2)}` : `\u00A3${left.toFixed(2)} left of \u00A3${budget.toFixed(2)}`}
+                        </div>
+                      )}
+                      {budget === 0 && !editingBudget && <div style={{ fontSize: 12, color: "#52525b" }}>No budget set</div>}
                     </div>
-                    {editingBudget === "all" ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <span style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}</span>
-                        <input type="number" defaultValue={budget} onBlur={(e) => saveBudget(cat.id, e.target.value)}
-                          style={{ width: 60, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "#e4e4e7", fontSize: 13, fontWeight: 600, textAlign: "right" }} />
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{spent > 0 ? `-\u00A3${spent.toFixed(2)}` : "\u00A30"}</span>
-                    )}
                   </div>
-                  {budget > 0 && (
-                    <>
-                      <div style={{ fontSize: 11, color: isOver ? "#ef4444" : "#71717a", marginBottom: 6 }}>
-                        {isOver ? `\u00A3${(spent - budget).toFixed(2)} over budget of \u00A3${budget.toFixed(0)}` : `\u00A3${left.toFixed(2)} left of \u00A3${budget.toFixed(0)}`}
-                      </div>
-                      <ProgressBar value={spent} max={budget} color={cat.color} />
-                    </>
-                  )}
-                  {budget === 0 && !editingBudget && spent > 0 && (
-                    <div style={{ fontSize: 11, color: "#52525b" }}>No budget set</div>
+                  {budget > 0 && !editingBudget && (
+                    <div style={{ marginLeft: 52, width: "calc(100% - 52px)", height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                      <div style={{ width: `${Math.min((spent / budget) * 100, 100)}%`, height: "100%", background: isOver ? "#ef4444" : cat.color, borderRadius: 2, transition: "width 0.4s" }} />
+                    </div>
                   )}
                 </div>
               );
@@ -957,228 +1011,294 @@ export default function Dashboard() {
 
       {/* ═══ ANALYTICS ═══ */}
       {activeTab === "analytics" && (() => {
-        // Time-filtered transactions
         const now = new Date();
         const ranges = {
           payday: { label: "Payday", days: now.getDate() <= 27 ? now.getDate() + (30 - 27) : now.getDate() - 27 },
-          "30d": { label: "30 Days", days: 30 },
-          "90d": { label: "3 Months", days: 90 },
+          "30d": { label: "Monthly", days: 30 },
+          "90d": { label: "Quarterly", days: 90 },
           custom: { label: "Custom", days: 0 },
           all: { label: "All", days: 9999 },
         };
-        let cutoff;
-        let cutoffEnd = now;
+        let cutoff, cutoffEnd = now;
         if (analyticsRange === "custom" && customDateFrom) {
           cutoff = new Date(customDateFrom);
           cutoffEnd = customDateTo ? new Date(customDateTo) : now;
         } else {
           cutoff = new Date(now.getTime() - (ranges[analyticsRange]?.days || 30) * 86400000);
         }
-
-        // Parse date strings back to comparable dates
         const parseDate = (d) => {
           const parts = d.split(" ");
           const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
           return new Date(now.getFullYear(), months[parts[1]] ?? 0, parseInt(parts[0]) || 1);
         };
-
         const filteredTxns = allTransactions.filter((t) => {
           const d = parseDate(t.date);
+          if (selectedAccounts && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
           return d >= cutoff && d <= cutoffEnd;
         });
         const spendTxns = filteredTxns.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
-        const incomeTxns = filteredTxns.filter((t) => t.amount > 0 && !NEUTRAL_CATS.includes(t.categoryId));
+        const incomeTxns = filteredTxns.filter((t) => t.amount > 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
         const fIncome = incomeTxns.reduce((s, t) => s + t.amount, 0);
         const fSpending = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
         const fNet = fIncome - fSpending;
 
-        // Category breakdown with percentages
+        // Category breakdown
         const catMap = {};
         spendTxns.forEach((t) => {
           if (!catMap[t.categoryId]) catMap[t.categoryId] = { total: 0, count: 0 };
           catMap[t.categoryId].total += Math.abs(t.amount);
           catMap[t.categoryId].count += 1;
         });
-        const sortedCats = CATEGORIES
-          .filter((c) => catMap[c.id] && !EXCLUDED_FROM_SPENDING.includes(c.id))
-          .sort((a, b) => (catMap[b.id]?.total || 0) - (catMap[a.id]?.total || 0));
+        const sortedCats = CATEGORIES.filter((c) => catMap[c.id]).sort((a, b) => (catMap[b.id]?.total || 0) - (catMap[a.id]?.total || 0));
 
-        // Daily average
-        const daysInRange = Math.max(ranges[analyticsRange].days, 1);
-        const dailyAvg = fSpending / Math.min(daysInRange, 30);
-
-        // Top merchants
+        // Merchant breakdown
         const merchantMap = {};
         spendTxns.forEach((t) => {
-          const key = t.merchant;
-          if (!merchantMap[key]) merchantMap[key] = { total: 0, count: 0 };
-          merchantMap[key].total += Math.abs(t.amount);
-          merchantMap[key].count += 1;
+          if (!merchantMap[t.merchant]) merchantMap[t.merchant] = { total: 0, count: 0 };
+          merchantMap[t.merchant].total += Math.abs(t.amount);
+          merchantMap[t.merchant].count += 1;
         });
-        const topMerchants = Object.entries(merchantMap).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+        const sortedMerchants = Object.entries(merchantMap).sort((a, b) => b[1].total - a[1].total);
+
+        const daysInRange = analyticsRange === "custom" ? Math.max(Math.ceil((cutoffEnd - cutoff) / 86400000), 1) : Math.max(ranges[analyticsRange]?.days || 30, 1);
+        const dailyAvg = fSpending / Math.min(daysInRange, 365);
+
+        // Period label
+        const periodLabel = analyticsRange === "custom" && customDateFrom
+          ? `${new Date(customDateFrom).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${customDateTo ? new Date(customDateTo).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "Now"}`
+          : `${cutoff.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${now.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
 
         return (
         <div style={{ padding: "0 20px" }}>
-          {/* Time range selector */}
-          <div style={{ display: "flex", gap: 6, marginTop: 20, marginBottom: 16 }}>
-            {Object.entries(ranges).map(([key, { label }]) => (
-              <button key={key} onClick={() => setAnalyticsRange(key)}
-                style={{ flex: 1, padding: "7px 0", fontSize: 11, border: "none", borderRadius: 8, cursor: "pointer",
-                  background: analyticsRange === key ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.04)",
-                  color: analyticsRange === key ? "#34d399" : "#71717a",
-                  fontWeight: analyticsRange === key ? 600 : 400 }}>
-                {label}
-              </button>
-            ))}
+          {/* Period badge + filter icons */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0 12px" }}>
+            <button onClick={() => setShowPeriodPicker(!showPeriodPicker)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, fontSize: 13, color: "#a1a1aa", cursor: "pointer" }}>
+              {periodLabel} {"\u25BE"}
+            </button>
+            <button onClick={() => setShowAccountFilter(true)}
+              style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "50%", cursor: "pointer", fontSize: 14, color: "#71717a" }}>
+              {"\u{1F3E6}"}
+            </button>
           </div>
-          {analyticsRange === "custom" && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>From</div>
-                <input type="date" value={customDateFrom} onChange={(e) => setCustomDateFrom(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
+
+          {/* Period picker dropdown */}
+          {showPeriodPicker && (
+            <div style={{ ...card, padding: 16, marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                {Object.entries(ranges).map(([key, { label }]) => (
+                  <button key={key} onClick={() => { setAnalyticsRange(key); if (key !== "custom") setShowPeriodPicker(false); }}
+                    style={{ flex: 1, padding: "8px 0", fontSize: 12, border: "none", borderRadius: 8, cursor: "pointer",
+                      background: analyticsRange === key ? "rgba(129,140,248,0.2)" : "rgba(255,255,255,0.04)",
+                      color: analyticsRange === key ? "#818cf8" : "#71717a",
+                      fontWeight: analyticsRange === key ? 600 : 400 }}>
+                    {label}
+                  </button>
+                ))}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>To</div>
-                <input type="date" value={customDateTo} onChange={(e) => setCustomDateTo(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
-              </div>
+              {analyticsRange === "custom" && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>From</div>
+                    <input type="date" value={customDateFrom} onChange={(e) => setCustomDateFrom(e.target.value)}
+                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>To</div>
+                    <input type="date" value={customDateTo} onChange={(e) => setCustomDateTo(e.target.value)}
+                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Summary */}
-          <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: "#71717a" }}>Net Flow</div>
-            <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4, color: fNet >= 0 ? "#34d399" : "#ef4444" }}>{fNet >= 0 ? "+" : ""}{"\u00A3"}{fNet.toFixed(2)}</div>
+          {/* Summary card */}
+          <div style={{ ...card, padding: 24, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: "#71717a" }}>Summary</div>
+            <div style={{ fontSize: 30, fontWeight: 700, marginTop: 4, color: fNet >= 0 ? "#34d399" : "#e4e4e7" }}>{fNet >= 0 ? "+" : ""}{"\u00A3"}{Math.abs(fNet).toFixed(2)}</div>
             <BarChart income={fIncome} spending={fSpending} maxVal={Math.max(fIncome, fSpending) * 1.1} />
-            <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22d3ee" }} />
-                <div><div style={{ fontSize: 11, color: "#71717a" }}>Income</div><div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{fIncome.toFixed(2)}</div></div>
+            <div style={{ display: "flex", justifyContent: "center", gap: 30, marginTop: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22d3ee" }} />
+                <div><div style={{ fontSize: 12, color: "#71717a" }}>Income</div><div style={{ fontSize: 15, fontWeight: 600 }}>{"\u00A3"}{fIncome.toFixed(2)}</div></div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f472b6" }} />
-                <div><div style={{ fontSize: 11, color: "#71717a" }}>Spending</div><div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{fSpending.toFixed(2)}</div></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f472b6" }} />
+                <div><div style={{ fontSize: 12, color: "#71717a" }}>Spending</div><div style={{ fontSize: 15, fontWeight: 600 }}>{"\u00A3"}{fSpending.toFixed(2)}</div></div>
               </div>
             </div>
           </div>
 
-          {/* Quick stats */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: 14 }}>
-              <div style={{ fontSize: 11, color: "#71717a" }}>Daily Avg</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#f472b6", marginTop: 4 }}>{"\u00A3"}{dailyAvg.toFixed(2)}</div>
-            </div>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: 14 }}>
-              <div style={{ fontSize: 11, color: "#71717a" }}>Transactions</div>
-              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{spendTxns.length}</div>
-            </div>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: 14 }}>
-              <div style={{ fontSize: 11, color: "#71717a" }}>Savings Rate</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: fIncome > 0 ? (fNet / fIncome > 0.3 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 4 }}>{fIncome > 0 ? Math.round((fNet / fIncome) * 100) : 0}%</div>
-            </div>
-          </div>
-
-          {/* Spending by category with percentages and bars */}
-          <div style={sectionLabel}>SPENDING BY CATEGORY</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
-            {sortedCats.map((cat) => {
-              const data = catMap[cat.id];
-              const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
-              const budget = getBudget(cat.id);
-              const overBudget = budget > 0 && data.total > budget;
-              return (
-                <div key={cat.id} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</div>
-                        <div style={{ fontSize: 11, color: "#71717a" }}>{data.count} txn{data.count !== 1 ? "s" : ""} {"\u00B7"} {pct.toFixed(1)}%</div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
-                      {overBudget && <div style={{ fontSize: 10, color: "#ef4444" }}>{"\u00A3"}{(data.total - budget).toFixed(0)} over</div>}
-                    </div>
-                  </div>
-                  <div style={{ width: "100%", height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2 }}>
-                    <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: cat.color, borderRadius: 2, transition: "width 0.4s" }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Top merchants */}
-          <div style={sectionLabel}>TOP MERCHANTS</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 16 }}>
-            {topMerchants.map(([name, data], i) => (
-              <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#52525b", width: 20 }}>{i + 1}</span>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{name}</div>
-                    <div style={{ fontSize: 11, color: "#71717a" }}>{data.count} txn{data.count !== 1 ? "s" : ""}</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
-              </div>
+          {/* Category / Merchant toggle */}
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 3, marginBottom: 16 }}>
+            {[{ id: "category", label: "Category" }, { id: "merchant", label: "Merchant" }].map((v) => (
+              <button key={v.id} onClick={() => setAnalyticsView(v.id)}
+                style={{ flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 600, border: "none", borderRadius: 8, cursor: "pointer",
+                  background: analyticsView === v.id ? "rgba(129,140,248,0.15)" : "transparent",
+                  color: analyticsView === v.id ? "#818cf8" : "#71717a" }}>
+                {v.label}
+              </button>
             ))}
           </div>
 
-          {/* Insights */}
-          <div style={sectionLabel}>INSIGHTS</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-            {sortedCats.length > 0 && (
-              <div style={{ ...card, padding: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Biggest category</div>
-                <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
-                  {sortedCats[0].icon} {sortedCats[0].label} is {((catMap[sortedCats[0].id].total / fSpending) * 100).toFixed(0)}% of your spending ({"\u00A3"}{catMap[sortedCats[0].id].total.toFixed(2)})
-                </div>
-              </div>
-            )}
-            {topMerchants.length > 0 && (
-              <div style={{ ...card, padding: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 500 }}>Most visited</div>
-                <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
-                  {topMerchants[0][0]} — {topMerchants[0][1].count} visits totalling {"\u00A3"}{topMerchants[0][1].total.toFixed(2)}
-                </div>
-              </div>
-            )}
-            {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).length > 0 && (
-              <div style={{ ...card, padding: 14, borderColor: "rgba(239,68,68,0.3)" }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: "#ef4444" }}>Over budget</div>
-                <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
-                  {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).map((c) => `${c.icon} ${c.label}`).join(", ")} — consider cutting back
-                </div>
-              </div>
-            )}
+          {/* Spending header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#818cf8" }}>Spending</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{fSpending.toFixed(2)}</span>
           </div>
 
-          {/* Income */}
-          <div style={sectionLabel}>INCOME</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {incomeTxns.map((tx) => {
-              const cat = getCat(tx.categoryId);
-              return (
-                <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                    <div><div style={{ fontSize: 13, fontWeight: 500 }}>{tx.merchant}</div><div style={{ fontSize: 11, color: "#71717a" }}>{tx.date}</div></div>
+          {/* Category view */}
+          {analyticsView === "category" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 20 }}>
+              {sortedCats.map((cat) => {
+                const data = catMap[cat.id];
+                const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
+                return (
+                  <div key={cat.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                    <div style={{ flex: 1, marginLeft: 12 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{cat.label}</div>
+                      <div style={{ fontSize: 12, color: "#71717a" }}>{data.count} Transaction{data.count !== 1 ? "s" : ""}</div>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>+{"\u00A3"}{tx.amount.toFixed(2)}</div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Merchant view */}
+          {analyticsView === "merchant" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 20 }}>
+              {sortedMerchants.map(([name, data]) => (
+                <div key={name} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#71717a", flexShrink: 0 }}>
+                    {name.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, marginLeft: 12 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{name}</div>
+                    <div style={{ fontSize: 12, color: "#71717a" }}>{data.count} Transaction{data.count !== 1 ? "s" : ""}</div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          )}
+
+          {/* Income section */}
+          {incomeTxns.length > 0 && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>Income</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>+{"\u00A3"}{fIncome.toFixed(2)}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 20 }}>
+                {incomeTxns.map((tx) => {
+                  const cat = getCat(tx.categoryId);
+                  return (
+                    <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(52,211,153,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                      <div style={{ flex: 1, marginLeft: 12 }}>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>{tx.merchant}</div>
+                        <div style={{ fontSize: 12, color: "#71717a" }}>{tx.date}</div>
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>+{"\u00A3"}{tx.amount.toFixed(2)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Quick stats */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: 16 }}>
+              <div style={{ fontSize: 12, color: "#71717a" }}>Daily Avg</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#f472b6", marginTop: 6 }}>{"\u00A3"}{dailyAvg.toFixed(2)}</div>
+            </div>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: 16 }}>
+              <div style={{ fontSize: 12, color: "#71717a" }}>Savings Rate</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: fIncome > 0 ? (fNet / fIncome > 0.2 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 6 }}>{fIncome > 0 ? Math.round((fNet / fIncome) * 100) : 0}%</div>
+            </div>
           </div>
+
+          {/* Insights */}
+          {sortedCats.length > 0 && (
+            <>
+              <div style={sectionLabel}>INSIGHTS</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                <div style={{ ...card, padding: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>Biggest category</div>
+                  <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
+                    {sortedCats[0].icon} {sortedCats[0].label} is {fSpending > 0 ? ((catMap[sortedCats[0].id].total / fSpending) * 100).toFixed(0) : 0}% of spending
+                  </div>
+                </div>
+                {sortedMerchants.length > 0 && (
+                  <div style={{ ...card, padding: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Most visited</div>
+                    <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
+                      {sortedMerchants[0][0]} — {sortedMerchants[0][1].count} visits, {"\u00A3"}{sortedMerchants[0][1].total.toFixed(2)}
+                    </div>
+                  </div>
+                )}
+                {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).length > 0 && (
+                  <div style={{ ...card, padding: 14, borderColor: "rgba(239,68,68,0.3)" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#ef4444" }}>Over budget</div>
+                    <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
+                      {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).map((c) => `${c.icon} ${c.label}`).join(", ")}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
+        );
+      })()}
+
+      {/* Account filter modal */}
+      {showAccountFilter && (() => {
+        const accountNames = [...new Set(allTransactions.map((t) => t.accountName).filter(Boolean))];
+        const selected = selectedAccounts || accountNames;
+        const toggle = (name) => {
+          const updated = selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name];
+          setSelectedAccounts(updated);
+          localStorage.setItem("selected_accounts", JSON.stringify(updated));
+        };
+        return (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+            <div onClick={() => setShowAccountFilter(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+            <div style={{ position: "relative", width: "100%", maxWidth: 430, background: "#1a1a2e", borderRadius: "20px 20px 0 0", padding: "20px 24px 32px", maxHeight: "70vh", overflowY: "auto" }}>
+              <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 20px" }} />
+              <div style={{ fontSize: 18, fontWeight: 700, textAlign: "center", marginBottom: 16 }}>Select accounts</div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <span style={{ fontSize: 13, color: "#818cf8" }}>Accounts ({accountNames.length})</span>
+                <button onClick={() => { const all = selected.length === accountNames.length ? [] : accountNames; setSelectedAccounts(all); localStorage.setItem("selected_accounts", JSON.stringify(all)); }}
+                  style={{ background: "none", border: "none", color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+                  {selected.length === accountNames.length ? "Deselect all" : "Select all"}
+                </button>
+              </div>
+              {accountNames.map((name) => (
+                <div key={name} onClick={() => toggle(name)} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", border: `2px solid ${selected.includes(name) ? "#818cf8" : "rgba(255,255,255,0.15)"}`, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 12, background: selected.includes(name) ? "rgba(129,140,248,0.15)" : "transparent" }}>
+                    {selected.includes(name) && <span style={{ color: "#818cf8", fontSize: 14, fontWeight: 700 }}>{"\u2713"}</span>}
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>{name}</span>
+                </div>
+              ))}
+              <button onClick={() => setShowAccountFilter(false)}
+                style={{ width: "100%", padding: "14px", marginTop: 16, background: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: "none", borderRadius: 12, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                Save
+              </button>
+            </div>
+          </div>
         );
       })()}
 
       {editingTx !== null && <CategoryPicker onSelect={(catId) => handleCategoryChange(editingTx, catId)} onClose={() => setEditingTx(null)} />}
       <div style={{ textAlign: "center", padding: "30px 20px 10px", fontSize: 11, color: "#3f3f46" }}>
-        {tlTokens.length > 0 ? "Live data via TrueLayer" : "Dummy data"} {"\u00B7"} Prototype v0.5
+        {tlTokens.length > 0 ? "Live data via TrueLayer" : "Dummy data"} {"\u00B7"} Prototype v0.6
       </div>
     </div>
   );
