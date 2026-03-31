@@ -226,30 +226,15 @@ const CATEGORY_RULES = [
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
 
-  // For POSITIVE amounts (money coming IN):
-  // - Check income rules first, then investment platforms (returns = income)
-  // - Skip transfer rules for positive amounts — incoming money should count as income
-  //   unless TrueLayer itself explicitly marks it as TRANSFER
-  // - This prevents salary paid via "standing order" from being classified as transfer
+  // ── POSITIVE amounts (money IN) → always "income" ──
+  // Never classify incoming money as "transfer" — even if TrueLayer says TRANSFER.
+  // Many UK banks report salary, Seedrs returns, refunds etc. as TRANSFER category.
+  // Internal transfers cancel out naturally (credit in one account = debit in another).
   if (amount > 0) {
-    // Check income-specific rules first
-    for (const rule of CATEGORY_RULES) {
-      if (rule.pattern.test(text)) {
-        if (rule.categoryId === "income") return "income";
-        if (rule.categoryId === "investment") return "income"; // investment returns = income
-        // Skip transfer/work_travel rules for positive amounts — let them be income
-        if (rule.categoryId === "transfer" || rule.categoryId === "work_travel") continue;
-        // Other categories with positive amounts (e.g. refund from Amazon = shopping? No, income)
-        // For positive amounts we generally want "income" unless it's a true internal transfer
-      }
-    }
-    // TrueLayer says it's a transfer? Trust that (internal bank moves)
-    if (tlCategory === "TRANSFER") return "transfer";
-    // Everything else positive = income
     return "income";
   }
 
-  // For NEGATIVE amounts (money going OUT): normal categorization
+  // ── NEGATIVE amounts (money OUT) → categorize normally ──
   for (const rule of CATEGORY_RULES) {
     if (rule.pattern.test(text)) {
       return rule.categoryId;
@@ -265,6 +250,11 @@ function categorize(merchantName, description, tlCategory, amount) {
 function mapTx(tx, accountName) {
   const amount = tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
   const ts = new Date(tx.timestamp);
+  const catId = categorize(tx.merchant_name, tx.description, tx.transaction_category, amount);
+  // Debug: log positive transactions to verify income categorization
+  if (amount > 0) {
+    console.log(`[INCOME] ${tx.merchant_name || tx.description} | £${amount} | TL_type=${tx.transaction_type} | TL_cat=${tx.transaction_category} | -> ${catId}`);
+  }
   return {
     id: `tl_${tx.transaction_id}`,
     date: ts.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
@@ -272,7 +262,7 @@ function mapTx(tx, accountName) {
     timestamp: ts.getTime(),
     merchant: tx.merchant_name || tx.description || "Unknown",
     amount,
-    categoryId: categorize(tx.merchant_name, tx.description, tx.transaction_category, amount),
+    categoryId: catId,
     pending: tx.transaction_classification?.includes("PENDING") || false,
     source: "truelayer",
     accountName: accountName || "Bank",
@@ -348,8 +338,6 @@ export default function Dashboard() {
   const [budgetOverrides, setBudgetOverrides] = useState(() => JSON.parse(localStorage.getItem("budget_overrides") || "{}"));
   const [editingBudget, setEditingBudget] = useState(null);
   const [analyticsRange, setAnalyticsRange] = useState("payday");
-  const [customDateFrom, setCustomDateFrom] = useState("");
-  const [customDateTo, setCustomDateTo] = useState("");
   const [recurring, setRecurring] = useState(() => JSON.parse(localStorage.getItem("recurring_items") || "null") || DEFAULT_RECURRING);
   const [editingRecurring, setEditingRecurring] = useState(null);
   const [txSearch, setTxSearch] = useState("");
@@ -360,6 +348,8 @@ export default function Dashboard() {
   const [drillCategory, setDrillCategory] = useState(null);
   const [drillSource, setDrillSource] = useState("budget"); // "budget" or "analytics"
   const [txCategoryFilter, setTxCategoryFilter] = useState(null);
+  const [customMonth, setCustomMonth] = useState(new Date().getMonth());
+  const [customYear, setCustomYear] = useState(new Date().getFullYear());
 
   // Handle OAuth callback
   useEffect(() => {
@@ -518,7 +508,9 @@ export default function Dashboard() {
   const getBudget = (catId) => budgetOverrides[catId] ?? CATEGORIES.find((c) => c.id === catId)?.budget ?? 0;
   const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
-  const totalSpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
+  // totalSpend = ALL spending in period (not just budgeted categories)
+  const totalSpend = spending; // reuse the 'spending' variable computed above from periodTransactions
+  const budgetedSpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
   const committedCatIds = ["housing", "bills", "subscriptions", "family"];
   const committedSpend = budgetedCats.filter((c) => committedCatIds.includes(c.id)).reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
@@ -1076,22 +1068,31 @@ export default function Dashboard() {
       {/* ═══ ANALYTICS ═══ */}
       {activeTab === "analytics" && (() => {
         const now = new Date();
-        const ranges = {
-          payday: { label: "Payday", days: now.getDate() <= 27 ? now.getDate() + (30 - 27) : now.getDate() - 27 },
-          "30d": { label: "Monthly", days: 30 },
-          "90d": { label: "Quarterly", days: 90 },
-          custom: { label: "Custom", days: 0 },
-          all: { label: "All", days: 9999 },
-        };
+        const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+        // Calculate cutoff dates based on selected range
         let cutoff, cutoffEnd = now;
-        if (analyticsRange === "custom" && customDateFrom) {
-          cutoff = new Date(customDateFrom);
-          cutoffEnd = customDateTo ? new Date(customDateTo) : now;
+        if (analyticsRange === "payday") {
+          // 27th to 27th
+          if (now.getDate() >= 27) {
+            cutoff = new Date(now.getFullYear(), now.getMonth(), 27);
+          } else {
+            cutoff = new Date(now.getFullYear(), now.getMonth() - 1, 27);
+          }
+        } else if (analyticsRange === "month") {
+          cutoff = new Date(customYear, customMonth, 1);
+          cutoffEnd = new Date(customYear, customMonth + 1, 0, 23, 59, 59);
+        } else if (analyticsRange === "90d") {
+          cutoff = new Date(now.getTime() - 90 * 86400000);
+        } else if (analyticsRange === "all") {
+          cutoff = new Date(2020, 0, 1);
         } else {
-          cutoff = new Date(now.getTime() - (ranges[analyticsRange]?.days || 30) * 86400000);
+          cutoff = new Date(now.getTime() - 30 * 86400000);
         }
+
         const filteredTxns = allTransactions.filter((t) => {
-          const d = parseTxDate(t.date);
+          const d = t.timestamp ? new Date(t.timestamp) : parseTxDate(t.date);
           if (selectedAccounts && selectedAccounts.length > 0 && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
           return d >= cutoff && d <= cutoffEnd;
         });
@@ -1127,58 +1128,85 @@ export default function Dashboard() {
         });
         const sortedIncome = Object.entries(incomeMap).sort((a, b) => b[1].total - a[1].total);
 
-        const daysInRange = analyticsRange === "custom" ? Math.max(Math.ceil((cutoffEnd - cutoff) / 86400000), 1) : Math.max(ranges[analyticsRange]?.days || 30, 1);
+        const daysInRange = Math.max(Math.ceil((cutoffEnd - cutoff) / 86400000), 1);
         const dailyAvg = fSpending / Math.min(daysInRange, 365);
 
-        const periodLabel = analyticsRange === "custom" && customDateFrom
-          ? `${new Date(customDateFrom).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${customDateTo ? new Date(customDateTo).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "Now"}`
-          : `${cutoff.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${now.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+        // Period label
+        let periodLabel;
+        if (analyticsRange === "payday") periodLabel = "Payday Period";
+        else if (analyticsRange === "month") periodLabel = `${MONTH_NAMES[customMonth]} ${customYear}`;
+        else if (analyticsRange === "90d") periodLabel = "Last 3 Months";
+        else if (analyticsRange === "all") periodLabel = "All Time";
+        else periodLabel = "Last 30 Days";
 
-        const maxCat = sortedCats.length > 0 ? catMap[sortedCats[0].id].total : 1;
+        const savingsRateAnalytics = fIncome > 0 ? Math.max(Math.min(Math.round((fNet / fIncome) * 100), 100), -100) : 0;
 
         return (
         <div style={{ padding: "0 20px" }}>
-          {/* Period + filter */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 12px" }}>
-            <button onClick={() => setShowPeriodPicker(!showPeriodPicker)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.15)", borderRadius: 20, fontSize: 13, color: "#818cf8", cursor: "pointer", fontWeight: 500 }}>
-              {periodLabel} {"\u25BE"}
-            </button>
-            <button onClick={() => setShowAccountFilter(true)}
-              style={{ width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "50%", cursor: "pointer", fontSize: 14, color: "#52525b" }}>
-              {"\u{1F3E6}"}
-            </button>
+          {/* Period selector — Emma style horizontal scroll */}
+          <div style={{ margin: "16px 0 4px" }}>
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
+              {[
+                { id: "payday", label: "Payday" },
+                { id: "month", label: "Monthly" },
+                { id: "90d", label: "3 Months" },
+                { id: "all", label: "All" },
+              ].map((r) => (
+                <button key={r.id} onClick={() => { setAnalyticsRange(r.id); setShowPeriodPicker(r.id === "month"); }}
+                  style={{ padding: "8px 18px", fontSize: 13, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                    background: analyticsRange === r.id ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.04)",
+                    color: analyticsRange === r.id ? "#818cf8" : "#71717a", fontWeight: analyticsRange === r.id ? 600 : 400 }}>
+                  {r.label}
+                </button>
+              ))}
+              <button onClick={() => setShowAccountFilter(true)}
+                style={{ padding: "8px 14px", fontSize: 13, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                  background: selectedAccounts && selectedAccounts.length > 0 ? "rgba(99,102,241,0.1)" : "rgba(255,255,255,0.04)",
+                  color: selectedAccounts && selectedAccounts.length > 0 ? "#818cf8" : "#71717a" }}>
+                {"\u{1F3E6}"} Filter
+              </button>
+            </div>
           </div>
 
-          {/* Period picker */}
-          {showPeriodPicker && (
-            <div style={{ ...card, padding: 14, marginBottom: 14 }}>
-              <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
-                {Object.entries(ranges).map(([key, { label }]) => (
-                  <button key={key} onClick={() => { setAnalyticsRange(key); if (key !== "custom") setShowPeriodPicker(false); }}
-                    style={{ flex: 1, padding: "8px 0", fontSize: 11, border: "none", borderRadius: 8, cursor: "pointer",
-                      background: analyticsRange === key ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
-                      color: analyticsRange === key ? "#818cf8" : "#71717a", fontWeight: analyticsRange === key ? 600 : 400 }}>
-                    {label}
-                  </button>
-                ))}
+          {/* Month/Year picker — only shown for "Monthly" */}
+          {analyticsRange === "month" && (
+            <div style={{ ...card, padding: "14px 12px", marginTop: 8, marginBottom: 4 }}>
+              {/* Year row */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20, marginBottom: 12 }}>
+                <button onClick={() => setCustomYear(y => y - 1)}
+                  style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "none", color: "#a1a1aa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {"\u2039"}
+                </button>
+                <span style={{ fontSize: 16, fontWeight: 700, minWidth: 60, textAlign: "center" }}>{customYear}</span>
+                <button onClick={() => setCustomYear(y => Math.min(y + 1, now.getFullYear()))}
+                  style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "none", color: "#a1a1aa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {"\u203A"}
+                </button>
               </div>
-              {analyticsRange === "custom" && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: "#52525b", marginBottom: 4 }}>From</div>
-                    <input type="date" value={customDateFrom} onChange={(e) => setCustomDateFrom(e.target.value)}
-                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: "#52525b", marginBottom: 4 }}>To</div>
-                    <input type="date" value={customDateTo} onChange={(e) => setCustomDateTo(e.target.value)}
-                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
-                  </div>
-                </div>
-              )}
+              {/* Month grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                {MONTH_SHORT.map((m, i) => {
+                  const isFuture = customYear === now.getFullYear() && i > now.getMonth();
+                  const isSelected = customMonth === i;
+                  return (
+                    <button key={m} onClick={() => !isFuture && setCustomMonth(i)} disabled={isFuture}
+                      style={{ padding: "10px 0", fontSize: 13, border: "none", borderRadius: 10, cursor: isFuture ? "default" : "pointer",
+                        background: isSelected ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.03)",
+                        color: isFuture ? "#27272a" : isSelected ? "#818cf8" : "#a1a1aa",
+                        fontWeight: isSelected ? 700 : 400 }}>
+                      {m}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
+
+          {/* Period label */}
+          <div style={{ textAlign: "center", padding: "10px 0 8px" }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "#818cf8" }}>{periodLabel}</span>
+            <span style={{ fontSize: 12, color: "#52525b", marginLeft: 8 }}>{filteredTxns.length} transactions</span>
+          </div>
 
           {/* Summary card with bar chart */}
           <div style={{ ...card, padding: "20px 16px", marginBottom: 14 }}>
@@ -1203,8 +1231,8 @@ export default function Dashboard() {
             </div>
             <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
               <div style={{ fontSize: 11, color: "#71717a" }}>Savings</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: fIncome > 0 ? (fNet / fIncome > 0.2 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 4 }}>
-                {fIncome > 0 ? Math.max(Math.min(Math.round((fNet / fIncome) * 100), 100), -100) : 0}%
+              <div style={{ fontSize: 18, fontWeight: 700, color: fIncome > 0 ? (savingsRateAnalytics > 20 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 4 }}>
+                {savingsRateAnalytics}%
               </div>
             </div>
           </div>
