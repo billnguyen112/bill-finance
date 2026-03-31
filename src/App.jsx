@@ -225,17 +225,39 @@ const CATEGORY_RULES = [
 
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
+
+  // For POSITIVE amounts (money coming IN):
+  // - Check income rules first, then investment platforms (returns = income)
+  // - Skip transfer rules for positive amounts — incoming money should count as income
+  //   unless TrueLayer itself explicitly marks it as TRANSFER
+  // - This prevents salary paid via "standing order" from being classified as transfer
+  if (amount > 0) {
+    // Check income-specific rules first
+    for (const rule of CATEGORY_RULES) {
+      if (rule.pattern.test(text)) {
+        if (rule.categoryId === "income") return "income";
+        if (rule.categoryId === "investment") return "income"; // investment returns = income
+        // Skip transfer/work_travel rules for positive amounts — let them be income
+        if (rule.categoryId === "transfer" || rule.categoryId === "work_travel") continue;
+        // Other categories with positive amounts (e.g. refund from Amazon = shopping? No, income)
+        // For positive amounts we generally want "income" unless it's a true internal transfer
+      }
+    }
+    // TrueLayer says it's a transfer? Trust that (internal bank moves)
+    if (tlCategory === "TRANSFER") return "transfer";
+    // Everything else positive = income
+    return "income";
+  }
+
+  // For NEGATIVE amounts (money going OUT): normal categorization
   for (const rule of CATEGORY_RULES) {
     if (rule.pattern.test(text)) {
-      if (rule.categoryId === "investment" && amount > 0) return "income";
-      if (rule.categoryId === "transfer" && amount > 0) return "transfer";
       return rule.categoryId;
     }
   }
   if (tlCategory === "TRANSFER") return "transfer";
   if (tlCategory === "BILL_PAYMENT") return "bills";
   if (tlCategory === "PURCHASE") return "shopping";
-  if (amount > 0) return "income";
   return "general";
 }
 
@@ -479,7 +501,7 @@ export default function Dashboard() {
   const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
   const spending = useMemo(() => periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [periodTransactions]);
   const netFlow = income - spending;
-  const savingsRate = income > 0 ? Math.round(((income - spending) / income) * 100) : 0;
+  const savingsRate = income > 0 ? Math.max(Math.min(Math.round(((income - spending) / income) * 100), 100), -100) : 0;
 
   MONTHLY_SAVINGS[MONTHLY_SAVINGS.length - 1].rate = savingsRate;
 
@@ -1182,7 +1204,7 @@ export default function Dashboard() {
             <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
               <div style={{ fontSize: 11, color: "#71717a" }}>Savings</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: fIncome > 0 ? (fNet / fIncome > 0.2 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 4 }}>
-                {fIncome > 0 ? Math.round((fNet / fIncome) * 100) : 0}%
+                {fIncome > 0 ? Math.max(Math.min(Math.round((fNet / fIncome) * 100), 100), -100) : 0}%
               </div>
             </div>
           </div>
