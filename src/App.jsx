@@ -276,9 +276,26 @@ const MERCHANT_LOGOS = {
 // Cache for broken logo URLs to avoid retrying
 const brokenLogos = new Set();
 
+// Clean up messy TrueLayer merchant names for display and logo matching
+function cleanMerchantName(raw) {
+  if (!raw) return raw;
+  let name = raw;
+  // Remove card numbers, reference numbers, country codes
+  name = name.replace(/\b(VSA?\d{6,}[\d*]+\S*)/gi, ""); // VISA card numbers
+  name = name.replace(/\b\d{6,}\b/g, ""); // long number sequences
+  name = name.replace(/\s*(GB|IE|US|UK|FR|DE|NL|LU|CH)\s*$/i, ""); // country codes at end
+  name = name.replace(/\s*(CD|CP)\s+\d+/gi, ""); // CD/CP references
+  name = name.replace(/\*+/g, ""); // asterisks
+  name = name.replace(/\s{2,}/g, " ").trim(); // collapse whitespace
+  return name;
+}
+
 function getMerchantLogo(merchantName) {
   if (!merchantName) return null;
   const lower = merchantName.toLowerCase();
+  // Also try to extract domain from merchant name (e.g., "APPLE.COM/BILL" → apple.com)
+  const domainMatch = lower.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
+
   for (const [key, domain] of Object.entries(MERCHANT_LOGOS)) {
     if (lower.includes(key)) {
       const url = `https://logo.clearbit.com/${domain}?size=80`;
@@ -286,6 +303,13 @@ function getMerchantLogo(merchantName) {
       return url;
     }
   }
+
+  // Try extracted domain directly
+  if (domainMatch) {
+    const url = `https://logo.clearbit.com/${domainMatch[1]}?size=80`;
+    if (!brokenLogos.has(url)) return url;
+  }
+
   return null;
 }
 
@@ -327,10 +351,11 @@ function MerchantIcon({ merchant, categoryId, size = 40 }) {
 
 // ── Auto-categorization ──────────────────────────────
 // Bank / fintech names — payments TO these are inter-account transfers, not spending
-const BANK_NAMES = /^(wise|revolut|monzo|starling|chase|hsbc|barclays|natwest|lloyds|nationwide|santander|halifax|first\s*direct|metro\s*bank|virgin\s*money|atom\s*bank|tsb|rbs|clydesdale|yorkshire|co-?operative\s*bank|triodos|n26|bunq|tide|cashplus|pockit|loot|curve|plum|chip|moneybox|nutmeg|wealthify|pensionbee)/i;
+// Uses \b word boundary instead of ^ to match "HSBC BNK" or "Wise London" etc.
+const BANK_NAMES = /\b(wise|revolut|monzo|starling|chase\b|hsbc|barclays|natwest|lloyds|nationwide|santander|halifax|first\s*direct|metro\s*bank|virgin\s*money|atom\s*bank|tsb\b|rbs\b|clydesdale|yorkshire|co-?operative\s*bank|triodos|n26\b|bunq|tide\b|cashplus|pockit|loot\b|curve\b|plum\b|chip\b|moneybox|nutmeg|wealthify|pensionbee)\b/i;
 
 // Transaction description patterns that indicate transfers
-const TRANSFER_DESC = /transfer|faster\s*payment|standing\s*order|direct\s*debit\s*(to|from)|ft\s*-|fp\s*-|bacs|chaps|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|moving\s*money|internal|current\s*account|payment\s*to\s*(mr|ms|mrs|miss)|sent\s*from/i;
+const TRANSFER_DESC = /transfer|faster\s*payment|standing\s*order|direct\s*debit\s*(to|from)|ft\s*-|fp\s*-|bacs\b|chaps\b|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|moving\s*money|internal|current\s*account|payment\s*(to|from)\s*(mr|ms|mrs|miss)|sent\s*from|emergency\s*fund|saver\b|payment\s*-\s*thank|\b\d{6}\s+\d{7,8}\b|internet\s*t|bnk\s|on\s*bns\s*saver/i;
 
 const SPENDING_RULES = [
   // Housing — very specific
@@ -378,8 +403,8 @@ function categorize(merchantName, description, tlCategory, amount) {
   // 1. TrueLayer explicitly says TRANSFER → trust it
   if (tlCategory === "TRANSFER") return "transfer";
 
-  // 2. Merchant name is a bank/fintech → transfer (not bills!)
-  if (BANK_NAMES.test(merchant)) return "transfer";
+  // 2. Merchant name or description mentions a bank/fintech → transfer
+  if (BANK_NAMES.test(text)) return "transfer";
 
   // 3. Description indicates transfer
   if (TRANSFER_DESC.test(text)) return "transfer";
@@ -399,16 +424,17 @@ function categorize(merchantName, description, tlCategory, amount) {
 function mapTx(tx, accountName) {
   const amount = tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
   const ts = new Date(tx.timestamp);
-  const catId = categorize(tx.merchant_name, tx.description, tx.transaction_category, amount);
-  // Debug: log all transactions to verify categorization
-  const label = amount > 0 ? "IN" : "OUT";
-  console.log(`[${label}] ${(tx.merchant_name || tx.description || "?").substring(0, 30)} | £${Math.abs(amount).toFixed(2)} | TL_cat=${tx.transaction_category} | -> ${catId}`);
+  const rawMerchant = tx.merchant_name || tx.description || "Unknown";
+  const catId = categorize(rawMerchant, tx.description, tx.transaction_category, amount);
+  // Debug
+  console.log(`[${amount > 0 ? "IN" : "OUT"}] ${rawMerchant.substring(0, 35)} | £${Math.abs(amount).toFixed(2)} | TL_cat=${tx.transaction_category} | -> ${catId}`);
   return {
     id: `tl_${tx.transaction_id}`,
     date: ts.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
     fullDate: ts.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
     timestamp: ts.getTime(),
-    merchant: tx.merchant_name || tx.description || "Unknown",
+    merchant: cleanMerchantName(rawMerchant),
+    rawMerchant,
     amount,
     categoryId: catId,
     pending: tx.transaction_classification?.includes("PENDING") || false,
