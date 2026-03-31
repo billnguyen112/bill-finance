@@ -5,8 +5,6 @@ const ACCOUNTS = [
   { name: "IBKR ISA", type: "Brokerage", balance: 7712.68, change: -0.5, currency: "USD" },
   { name: "Trading 212 ISA", type: "ISA", balance: 918, change: null, currency: "GBP" },
   { name: "Kraken", type: "Crypto", balance: 0, change: 0, currency: "GBP" },
-  { name: "Monzo", type: "Bank", balance: 2145.8, change: null, currency: "GBP" },
-  { name: "HSBC", type: "Bank", balance: 5620.3, change: null, currency: "GBP" },
   { name: "Republic", type: "Private Equity", balance: 1500, change: null, currency: "USD" },
 ];
 
@@ -37,9 +35,8 @@ const CATEGORIES = [
   { id: "general", label: "General", icon: "\u{1F4CC}", color: "#a1a1aa", budget: 0 },
 ];
 
-// Categories excluded from spending analytics and budgets
 const EXCLUDED_FROM_SPENDING = ["income", "work_travel", "transfer", "investment"];
-const EXCLUDED_FROM_INCOME = ["transfer", "investment"]; // don't exclude "income" category from income calcs
+const EXCLUDED_FROM_INCOME = ["transfer", "investment"];
 
 const DEFAULT_RECURRING = [
   { id: "r1", merchant: "Rightmove Rent", amount: 1050, categoryId: "housing", frequency: "Monthly", nextDate: "27 Apr" },
@@ -47,27 +44,6 @@ const DEFAULT_RECURRING = [
   { id: "r3", merchant: "Netflix", amount: 10.99, categoryId: "subscriptions", frequency: "Monthly", nextDate: "25 Apr" },
   { id: "r4", merchant: "TfL Auto Top-up", amount: 20, categoryId: "transport", frequency: "Weekly", nextDate: "2 Apr" },
   { id: "r5", merchant: "Vietnam Family Transfer", amount: 245.35, categoryId: "family", frequency: "Monthly", nextDate: "24 Apr" },
-];
-
-const initialTransactions = [
-  { id: 1, date: "29 Mar", merchant: "Odeon", amount: -29.0, categoryId: "entertainment", pending: true },
-  { id: 2, date: "29 Mar", merchant: "Salad Projects", amount: -12.95, categoryId: "eating_out", pending: true },
-  { id: 3, date: "29 Mar", merchant: "Emma", amount: -9.99, categoryId: "subscriptions", pending: true },
-  { id: 4, date: "29 Mar", merchant: "Owl And Hitchhiker", amount: -15.0, categoryId: "eating_out", pending: true },
-  { id: 5, date: "29 Mar", merchant: "Regal Gaming", amount: -1.5, categoryId: "entertainment", pending: true },
-  { id: 6, date: "29 Mar", merchant: "Owl And Hitchhiker", amount: -21.45, categoryId: "eating_out", pending: true },
-  { id: 7, date: "29 Mar", merchant: "Eyes On Broadway", amount: -75.0, categoryId: "health", pending: true },
-  { id: 8, date: "27 Mar", merchant: "Seedrs", amount: 33.0, categoryId: "work_travel", pending: false },
-  { id: 9, date: "27 Mar", merchant: "Seedrs Ltd", amount: 3200.0, categoryId: "income", pending: false },
-  { id: 10, date: "27 Mar", merchant: "Rightmove Rent", amount: -1050.0, categoryId: "housing", pending: false },
-  { id: 11, date: "26 Mar", merchant: "Tesco Express", amount: -8.45, categoryId: "groceries", pending: false },
-  { id: 12, date: "26 Mar", merchant: "TfL", amount: -2.8, categoryId: "transport", pending: false },
-  { id: 13, date: "25 Mar", merchant: "Pret A Manger", amount: -5.9, categoryId: "eating_out", pending: false },
-  { id: 14, date: "25 Mar", merchant: "Amazon", amount: -24.99, categoryId: "shopping", pending: false },
-  { id: 15, date: "25 Mar", merchant: "Netflix", amount: -10.99, categoryId: "subscriptions", pending: false },
-  { id: 16, date: "24 Mar", merchant: "Sainsbury's", amount: -32.1, categoryId: "groceries", pending: false },
-  { id: 17, date: "24 Mar", merchant: "Vietnam Family Transfer", amount: -245.35, categoryId: "family", pending: false },
-  { id: 18, date: "23 Mar", merchant: "Seedrs Ltd", amount: 1796.84, categoryId: "income", pending: false },
 ];
 
 const NET_WORTH_HISTORY = [
@@ -91,6 +67,8 @@ const MONTHLY_SAVINGS = [
 function getCat(id) {
   return CATEGORIES.find((c) => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
 }
+
+function fmt(n) { return Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 // ── Components ────────────────────────────────────────
 function MiniChart({ data, width = 120, height = 40 }) {
@@ -127,16 +105,6 @@ function Sparkline({ data, width = 60, height = 24, color = "#34d399" }) {
   );
 }
 
-function ProgressBar({ value, max, color }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
-  const isOver = value > max;
-  return (
-    <div style={{ width: "100%", height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
-      <div style={{ width: `${pct}%`, height: "100%", background: isOver ? "#ef4444" : color, borderRadius: 3, transition: "width 0.6s ease" }} />
-    </div>
-  );
-}
-
 function SavingsGauge({ rate, size = 80 }) {
   const r = (size - 12) / 2;
   const circ = 2 * Math.PI * r;
@@ -155,22 +123,30 @@ function SavingsGauge({ rate, size = 80 }) {
   );
 }
 
-function DonutChart({ spent, committed, total, size = 180 }) {
-  const r = (size - 20) / 2;
+function DonutChart({ segments, centerAmount, centerLabel, size = 200 }) {
+  const r = (size - 24) / 2;
   const circ = 2 * Math.PI * r;
-  const spentPct = Math.min(spent / total, 1);
-  const committedPct = Math.min(committed / total, 1);
-  const remaining = Math.max(total - spent - committed, 0);
+  const total = segments.reduce((s, seg) => s + seg.value, 0);
+  let offset = 0;
   return (
     <div style={{ position: "relative", width: size, height: size, margin: "0 auto" }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="14" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#c084fc" strokeWidth="14" strokeDasharray={`${committedPct * circ} ${circ}`} strokeDashoffset={`${-spentPct * circ}`} strokeLinecap="round" />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#818cf8" strokeWidth="14" strokeDasharray={`${spentPct * circ} ${circ}`} strokeLinecap="round" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="16" />
+        {segments.map((seg, i) => {
+          const pct = total > 0 ? seg.value / total : 0;
+          const dash = pct * circ;
+          const o = offset;
+          offset += pct;
+          return (
+            <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={seg.color} strokeWidth="16"
+              strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={`${-o * circ}`} strokeLinecap="round"
+              style={{ transition: "stroke-dasharray 0.6s ease, stroke-dashoffset 0.6s ease" }} />
+          );
+        })}
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: 22, fontWeight: 700 }}>{"\u00A3"}{remaining.toFixed(2)}</div>
-        <div style={{ fontSize: 11, color: "#71717a" }}>left of {"\u00A3"}{total.toFixed(0)}</div>
+        <div style={{ fontSize: 24, fontWeight: 700 }}>{centerAmount}</div>
+        <div style={{ fontSize: 11, color: "#71717a", marginTop: 2 }}>{centerLabel}</div>
       </div>
     </div>
   );
@@ -178,24 +154,30 @@ function DonutChart({ spent, committed, total, size = 180 }) {
 
 function BarChart({ income, spending, maxVal }) {
   const barH = 140;
-  const incH = (income / maxVal) * barH;
-  const spendH = (spending / maxVal) * barH;
+  const incH = maxVal > 0 ? (income / maxVal) * barH : 0;
+  const spendH = maxVal > 0 ? (spending / maxVal) * barH : 0;
   return (
     <div style={{ display: "flex", justifyContent: "center", gap: 28, alignItems: "flex-end", height: barH + 10, marginTop: 10 }}>
-      <div style={{ width: 80, height: incH, background: "linear-gradient(180deg, #22d3ee 0%, #06b6d4 100%)", borderRadius: "8px 8px 4px 4px", transition: "height 0.5s ease" }} />
-      <div style={{ width: 80, height: spendH, background: "linear-gradient(180deg, #f472b6 0%, #ec4899 100%)", borderRadius: "8px 8px 4px 4px", transition: "height 0.5s ease" }} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#22d3ee" }}>{"\u00A3"}{fmt(income)}</div>
+        <div style={{ width: 56, height: incH, background: "linear-gradient(180deg, #22d3ee 0%, #06b6d4 100%)", borderRadius: "8px 8px 4px 4px", transition: "height 0.5s ease" }} />
+        <div style={{ fontSize: 11, color: "#71717a" }}>Income</div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#f472b6" }}>{"\u00A3"}{fmt(spending)}</div>
+        <div style={{ width: 56, height: spendH, background: "linear-gradient(180deg, #f472b6 0%, #ec4899 100%)", borderRadius: "8px 8px 4px 4px", transition: "height 0.5s ease" }} />
+        <div style={{ fontSize: 11, color: "#71717a" }}>Spending</div>
+      </div>
     </div>
   );
 }
 
 function CategoryPicker({ onSelect, onClose }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
       <div style={{ width: "100%", maxWidth: 430, background: "#18181b", borderRadius: "20px 20px 0 0", padding: "20px 20px 30px", maxHeight: "60vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>Choose category</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#71717a", fontSize: 20, cursor: "pointer" }}>{"\u2715"}</button>
-        </div>
+        <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 16px" }} />
+        <div style={{ fontSize: 16, fontWeight: 600, textAlign: "center", marginBottom: 16 }}>Choose category</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {CATEGORIES.map((cat) => (
             <button key={cat.id} onClick={() => onSelect(cat.id)}
@@ -209,60 +191,51 @@ function CategoryPicker({ onSelect, onClose }) {
   );
 }
 
+// Bottom sheet component
+function BottomSheet({ onClose, children, title }) {
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+      <div style={{ position: "relative", width: "100%", maxWidth: 430, background: "#131320", borderRadius: "20px 20px 0 0", padding: "16px 20px 32px", maxHeight: "85vh", overflowY: "auto" }}>
+        <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 16px" }} />
+        {title && <div style={{ fontSize: 18, fontWeight: 700, textAlign: "center", marginBottom: 16 }}>{title}</div>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ── Auto-categorization ──────────────────────────────
 const CATEGORY_RULES = [
-  // Housing
   { pattern: /rent|mortgage|rightmove|openrent|letting|housing/i, categoryId: "housing" },
-  // Eating out
   { pattern: /pret|starbucks|costa|mcdonald|burger|nando|wagamama|pizza|kebab|sushi|cafe|coffee|restaurant|dining|deliveroo|uber\s*eats|just\s*eat|dine|grill|kitchen|bistro|brasserie|bar\s|pub\s|salad|greggs|subway|kfc|domino|five\s*guys|leon|itsu|wasabi|eat\b|food\s*hall|canteen/i, categoryId: "eating_out" },
-  // Groceries
   { pattern: /tesco|sainsbury|asda|aldi|lidl|waitrose|morrisons|co-?op|ocado|marks.*spencer|m&s\s*food|grocery|supermarket|iceland/i, categoryId: "groceries" },
-  // Transport
   { pattern: /tfl|uber(?!\s*eat)|bolt|lime|taxi|cab|train|rail|bus|parking|petrol|fuel|shell|bp\s|esso|car\s*wash|congestion|oyster|citymapper/i, categoryId: "transport" },
-  // Shopping
   { pattern: /amazon|ebay|asos|zara|h&m|primark|nike|adidas|uniqlo|john\s*lewis|argos|currys|ikea|apple\.com|google\s*store|samsung/i, categoryId: "shopping" },
-  // Entertainment
   { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s|now\s*tv|theatre|concert|ticket/i, categoryId: "entertainment" },
-  // Subscriptions
   { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium/i, categoryId: "subscriptions" },
-  // Bills
   { pattern: /electric|gas\b|water|council\s*tax|internet|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin|bt\s|ee\s|vodafone|three\s|o2\s/i, categoryId: "bills" },
-  // Health
   { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|eye|boots\s*optician|specsaver|gym|fitness|health/i, categoryId: "health" },
-  // Family
   { pattern: /family|transfer.*viet|remittance|wise.*vn|moneygram|western\s*union/i, categoryId: "family" },
-  // Work/Travel
   { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air/i, categoryId: "work_travel" },
-  // Income
   { pattern: /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance/i, categoryId: "income" },
-  // Investments (BEFORE transfers — T212, IBKR deposits are investments not transfers)
-  // NOTE: only matches negative amounts via categorize() logic below
   { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube/i, categoryId: "investment" },
-  // Transfers (net-zero moves between own accounts)
   { pattern: /transfer|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|internal|between\s*accounts|moving\s*money|hsbc\s*save|current\s*account|savings\s*account|wise\b.*gbp|wise\b.*eur|wise\b.*usd|chase\b.*account|standing\s*order/i, categoryId: "transfer" },
 ];
 
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
-
-  // Check keyword rules FIRST
   for (const rule of CATEGORY_RULES) {
     if (rule.pattern.test(text)) {
-      // Investment/transfer platforms: positive = income (withdrawal/return), negative = investment/transfer
       if (rule.categoryId === "investment" && amount > 0) return "income";
-      if (rule.categoryId === "transfer" && amount > 0) return "transfer"; // incoming transfer stays transfer
+      if (rule.categoryId === "transfer" && amount > 0) return "transfer";
       return rule.categoryId;
     }
   }
-
-  // TrueLayer category-based fallback
   if (tlCategory === "TRANSFER") return "transfer";
   if (tlCategory === "BILL_PAYMENT") return "bills";
   if (tlCategory === "PURCHASE") return "shopping";
-
-  // If positive amount and nothing matched, it's income
   if (amount > 0) return "income";
-
   return "general";
 }
 
@@ -273,7 +246,7 @@ function mapTx(tx, accountName) {
   return {
     id: `tl_${tx.transaction_id}`,
     date: ts.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
-    fullDate: ts.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
+    fullDate: ts.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
     timestamp: ts.getTime(),
     merchant: tx.merchant_name || tx.description || "Unknown",
     amount,
@@ -283,74 +256,68 @@ function mapTx(tx, accountName) {
     accountName: accountName || "Bank",
   };
 }
+
 async function startBankConnect() {
   const res = await fetch("/api/connect");
   const { url } = await res.json();
   window.location.href = url;
 }
 
-async function exchangeCode(code) {
-  const res = await fetch("/api/callback", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code }),
-  });
-  return res.json();
-}
-
 async function fetchAccounts(token) {
-  const res = await fetch("/api/accounts", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch("/api/accounts", { headers: { Authorization: `Bearer ${token}` } });
   return res.json();
 }
-
 async function fetchBalance(token, accountId) {
-  const res = await fetch(`/api/accounts/${accountId}/balance`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(`/api/accounts/${accountId}/balance`, { headers: { Authorization: `Bearer ${token}` } });
   return res.json();
 }
-
 async function fetchTransactions(token, accountId) {
-  const res = await fetch(`/api/accounts/${accountId}/transactions`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(`/api/accounts/${accountId}/transactions`, { headers: { Authorization: `Bearer ${token}` } });
   return res.json();
 }
-
 async function fetchCards(token) {
-  const res = await fetch("/api/cards", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch("/api/cards", { headers: { Authorization: `Bearer ${token}` } });
   return res.json();
 }
-
 async function fetchCardBalance(token, cardId) {
-  const res = await fetch(`/api/cards/${cardId}/balance`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(`/api/cards/${cardId}/balance`, { headers: { Authorization: `Bearer ${token}` } });
+  return res.json();
+}
+async function fetchCardTransactions(token, cardId) {
+  const res = await fetch(`/api/cards/${cardId}/transactions`, { headers: { Authorization: `Bearer ${token}` } });
   return res.json();
 }
 
-async function fetchCardTransactions(token, cardId) {
-  const res = await fetch(`/api/cards/${cardId}/transactions`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.json();
+// ── Date helpers ────────────────────────────────────
+const MONTHS_MAP = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+function parseTxDate(d) {
+  const parts = d.split(" ");
+  const now = new Date();
+  return new Date(now.getFullYear(), MONTHS_MAP[parts[1]] ?? 0, parseInt(parts[0]) || 1);
+}
+
+function formatDateHeader(dateStr) {
+  const d = parseTxDate(dateStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const isToday = d.getDate() === today.getDate() && d.getMonth() === today.getMonth();
+  const isYesterday = d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth();
+
+  if (isToday) return "Today";
+  if (isYesterday) return "Yesterday";
+  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 }
 
 // ── Main ──────────────────────────────────────────────
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
-  const [transactions, setTransactions] = useState(initialTransactions);
   const [editingTx, setEditingTx] = useState(null);
   const [holdingsSort, setHoldingsSort] = useState("pnl_abs");
-  const budgetPeriod = { start: "27 Mar", end: "27 Apr" };
 
-  // TrueLayer state — array of tokens, one per connected bank
+  // TrueLayer state
   const [tlTokens, setTlTokens] = useState(() => JSON.parse(localStorage.getItem("tl_tokens") || "[]"));
-  const tlToken = tlTokens[0] || null; // for backwards compat
   const [tlAccounts, setTlAccounts] = useState([]);
   const [tlTransactions, setTlTransactions] = useState([]);
   const [bankLoading, setBankLoading] = useState(false);
@@ -358,20 +325,21 @@ export default function Dashboard() {
   const [categoryOverrides, setCategoryOverrides] = useState(() => JSON.parse(localStorage.getItem("tl_cat_overrides") || "{}"));
   const [budgetOverrides, setBudgetOverrides] = useState(() => JSON.parse(localStorage.getItem("budget_overrides") || "{}"));
   const [editingBudget, setEditingBudget] = useState(null);
-  const [analyticsRange, setAnalyticsRange] = useState("payday"); // payday, 30d, 90d, custom, all
+  const [analyticsRange, setAnalyticsRange] = useState("payday");
   const [customDateFrom, setCustomDateFrom] = useState("");
   const [customDateTo, setCustomDateTo] = useState("");
   const [recurring, setRecurring] = useState(() => JSON.parse(localStorage.getItem("recurring_items") || "null") || DEFAULT_RECURRING);
   const [editingRecurring, setEditingRecurring] = useState(null);
   const [txSearch, setTxSearch] = useState("");
-  const [budgetView, setBudgetView] = useState("category"); // category or merchant
-  const [analyticsView, setAnalyticsView] = useState("category"); // category or merchant
+  const [analyticsView, setAnalyticsView] = useState("category");
   const [showPeriodPicker, setShowPeriodPicker] = useState(false);
   const [showAccountFilter, setShowAccountFilter] = useState(false);
   const [selectedAccounts, setSelectedAccounts] = useState(() => JSON.parse(localStorage.getItem("selected_accounts") || "null"));
-  const [drillCategory, setDrillCategory] = useState(null); // category id to drill into
+  const [drillCategory, setDrillCategory] = useState(null);
+  const [drillSource, setDrillSource] = useState("budget"); // "budget" or "analytics"
+  const [txCategoryFilter, setTxCategoryFilter] = useState(null);
 
-  // Handle OAuth callback — token comes back from Express server via redirect
+  // Handle OAuth callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("tl_token");
@@ -388,7 +356,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Fetch bank data across all connected tokens
+  // Fetch bank data
   const loadBankData = useCallback(async () => {
     if (tlTokens.length === 0) return;
     setBankLoading(true);
@@ -398,10 +366,8 @@ export default function Dashboard() {
 
     for (const token of tlTokens) {
       try {
-        // Fetch current/savings accounts
         let accountsRes;
         try { accountsRes = await fetchAccounts(token); } catch { accountsRes = {}; }
-        // Detect expired/invalid tokens
         if (accountsRes.error || accountsRes.status === "Failed") {
           console.warn("Token expired or invalid:", accountsRes.error);
           continue;
@@ -419,7 +385,6 @@ export default function Dashboard() {
           } catch (e) { console.warn("Failed to fetch txns for", acc.display_name, e.message); }
         }
 
-        // Fetch credit cards
         let cardsRes;
         try { cardsRes = await fetchCards(token); } catch { cardsRes = {}; }
         const cards = cardsRes.results || [];
@@ -430,7 +395,7 @@ export default function Dashboard() {
             allAccounts.push({
               ...card,
               display_name: card.display_name || card.card_type || "Credit Card",
-              balance: -(bal?.current || 0), // credit card balance is what you owe
+              balance: -(bal?.current || 0),
               currency: bal?.currency || "GBP",
               type: "Credit Card",
               source: "truelayer",
@@ -443,13 +408,9 @@ export default function Dashboard() {
         }
       } catch (err) {
         console.warn("Bank data load error:", err.message);
-        if (err.message?.includes("401")) {
-          setTlTokens((prev) => { const updated = prev.filter((t) => t !== token); localStorage.setItem("tl_tokens", JSON.stringify(updated)); return updated; });
-        }
       }
     }
 
-    // Sort by timestamp newest first
     allTxns.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     if (allAccounts.length === 0 && tlTokens.length > 0) {
@@ -461,9 +422,7 @@ export default function Dashboard() {
     setBankLoading(false);
   }, [tlTokens]);
 
-  useEffect(() => {
-    loadBankData();
-  }, [loadBankData]);
+  useEffect(() => { loadBankData(); }, [loadBankData]);
 
   const disconnectBank = () => {
     localStorage.removeItem("tl_tokens");
@@ -472,7 +431,7 @@ export default function Dashboard() {
     setTlTransactions([]);
   };
 
-  // Merge TrueLayer accounts with hardcoded ones
+  // Merge accounts
   const bankAccounts = tlAccounts.map((acc) => ({
     name: acc.display_name || acc.provider?.display_name || "Bank Account",
     type: acc.type || "Bank",
@@ -482,42 +441,37 @@ export default function Dashboard() {
     source: "truelayer",
   }));
 
-  // Replace hardcoded Bank entries with live ones; keep investments
   const mergedAccounts = tlAccounts.length > 0
     ? [...ACCOUNTS.filter((a) => a.type !== "Bank"), ...bankAccounts]
     : ACCOUNTS;
 
-  // Use live transactions when connected, fallback to manual for demo
-  // Apply any manual category overrides
+  // Transactions — use live when connected, apply overrides
   const allTransactions = useMemo(() => {
-    const txns = tlTransactions.length > 0 ? tlTransactions : transactions;
+    const txns = tlTransactions.length > 0 ? tlTransactions : [];
     return txns.map((t) => categoryOverrides[t.id] ? { ...t, categoryId: categoryOverrides[t.id] } : t);
-  }, [tlTransactions, transactions, categoryOverrides]);
+  }, [tlTransactions, categoryOverrides]);
 
   const totalNetWorth = mergedAccounts.reduce((s, a) => s + a.balance, 0);
   const totalInvested = mergedAccounts.filter((a) => ["Brokerage", "ISA", "Private Equity", "Crypto"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
-  const totalCash = mergedAccounts.filter((a) => a.type === "Bank").reduce((s, a) => s + a.balance, 0);
-
-  // Parse date helper for filtering
-  const parseTxDate = (d) => {
-    const parts = d.split(" ");
-    const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
-    const now = new Date();
-    return new Date(now.getFullYear(), months[parts[1]] ?? 0, parseInt(parts[0]) || 1);
-  };
+  const totalCash = mergedAccounts.filter((a) => a.type === "Bank" || a.type === "Credit Card").reduce((s, a) => s + a.balance, 0);
 
   // Budget period: 27th of last month to 27th of this month
   const budgetCutoff = useMemo(() => {
     const now = new Date();
     const day = now.getDate();
-    if (day >= 27) {
-      return new Date(now.getFullYear(), now.getMonth(), 27);
-    } else {
-      return new Date(now.getFullYear(), now.getMonth() - 1, 27);
-    }
+    if (day >= 27) return new Date(now.getFullYear(), now.getMonth(), 27);
+    return new Date(now.getFullYear(), now.getMonth() - 1, 27);
   }, []);
 
-  // Filter transactions to budget period for budget calculations
+  const budgetEnd = useMemo(() => {
+    const c = new Date(budgetCutoff);
+    return new Date(c.getFullYear(), c.getMonth() + 1, 27);
+  }, [budgetCutoff]);
+
+  const budgetPeriodLabel = useMemo(() => {
+    return `${budgetCutoff.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${budgetEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+  }, [budgetCutoff, budgetEnd]);
+
   const periodTransactions = useMemo(() => {
     return allTransactions.filter((t) => parseTxDate(t.date) >= budgetCutoff);
   }, [allTransactions, budgetCutoff]);
@@ -544,36 +498,27 @@ export default function Dashboard() {
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
   const totalSpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
-  // Committed = recurring items (rent, subs, bills). Variable = everything else actually spent.
   const committedCatIds = ["housing", "bills", "subscriptions", "family"];
   const committedSpend = budgetedCats.filter((c) => committedCatIds.includes(c.id)).reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
   const variableSpend = totalSpend - committedSpend;
-  const discretionarySpend = totalSpend; // alias for backwards compat
-  const daysInPeriod = 31;
-  const dayOfPeriod = new Date().getDate();
+
+  // Days calculation
+  const daysInPeriod = useMemo(() => Math.ceil((budgetEnd - budgetCutoff) / 86400000), [budgetCutoff, budgetEnd]);
+  const dayOfPeriod = useMemo(() => Math.ceil((new Date() - budgetCutoff) / 86400000), [budgetCutoff]);
   const daysLeft = Math.max(daysInPeriod - dayOfPeriod, 1);
   const dailyAllowance = Math.max((totalBudget - totalSpend) / daysLeft, 0);
+  const spendingPace = daysInPeriod > 0 ? (totalSpend / dayOfPeriod) * daysInPeriod : 0; // projected spend at current pace
 
-  const saveRecurring = (items) => {
-    setRecurring(items);
-    localStorage.setItem("recurring_items", JSON.stringify(items));
-  };
-
+  const saveRecurring = (items) => { setRecurring(items); localStorage.setItem("recurring_items", JSON.stringify(items)); };
   const updateRecurringItem = (id, field, value) => {
-    const updated = recurring.map((r) => r.id === id ? { ...r, [field]: field === "amount" ? Number(value) : value } : r);
-    saveRecurring(updated);
+    saveRecurring(recurring.map((r) => r.id === id ? { ...r, [field]: field === "amount" ? Number(value) : value } : r));
   };
-
-  const deleteRecurringItem = (id) => {
-    saveRecurring(recurring.filter((r) => r.id !== id));
-  };
-
+  const deleteRecurringItem = (id) => saveRecurring(recurring.filter((r) => r.id !== id));
   const addRecurringItem = () => {
     const newItem = { id: `r${Date.now()}`, merchant: "New Item", amount: 0, categoryId: "general", frequency: "Monthly", nextDate: "" };
     saveRecurring([...recurring, newItem]);
     setEditingRecurring(newItem.id);
   };
-
   const saveBudget = (catId, amount) => {
     setBudgetOverrides((prev) => {
       const updated = { ...prev, [catId]: Number(amount) };
@@ -583,12 +528,11 @@ export default function Dashboard() {
     setEditingBudget(null);
   };
 
-  // Holdings P&L
+  // Holdings
   const totalCurrentValue = HOLDINGS.reduce((s, h) => s + h.value, 0);
   const totalCostBasis = HOLDINGS.reduce((s, h) => s + h.costBasis, 0);
   const totalPnlAbs = totalCurrentValue - totalCostBasis;
   const totalPnlPct = totalCostBasis > 0 ? ((totalPnlAbs / totalCostBasis) * 100) : 0;
-
   const sortedHoldings = useMemo(() => {
     return [...HOLDINGS].sort((a, b) => {
       if (holdingsSort === "pnl_abs") return (b.value - b.costBasis) - (a.value - a.costBasis);
@@ -599,9 +543,6 @@ export default function Dashboard() {
   }, [holdingsSort]);
 
   const handleCategoryChange = (txId, newCatId) => {
-    // For hardcoded transactions
-    setTransactions((prev) => prev.map((t) => (t.id === txId ? { ...t, categoryId: newCatId } : t)));
-    // For TrueLayer transactions — store override
     if (String(txId).startsWith("tl_")) {
       setCategoryOverrides((prev) => {
         const updated = { ...prev, [txId]: newCatId };
@@ -613,148 +554,153 @@ export default function Dashboard() {
   };
 
   const tabs = [
-    { id: "overview", label: "Overview" },
-    { id: "holdings", label: "Holdings" },
-    { id: "transactions", label: "Txns" },
-    { id: "budget", label: "Budget" },
-    { id: "analytics", label: "Analytics" },
+    { id: "overview", label: "Overview", icon: "\u{1F3E0}" },
+    { id: "holdings", label: "Holdings", icon: "\u{1F4C8}" },
+    { id: "transactions", label: "Txns", icon: "\u{1F4B3}" },
+    { id: "budget", label: "Budget", icon: "\u{1F4CA}" },
+    { id: "analytics", label: "Analytics", icon: "\u{1F4C9}" },
   ];
 
-  const sectionLabel = { fontSize: 12, color: "#71717a", letterSpacing: "0.05em", marginBottom: 10, marginTop: 24 };
-  const card = { padding: "12px 14px", background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)" };
+  const card = { padding: "14px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.05)" };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0a0a0f", color: "#e4e4e7", fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: 430, margin: "0 auto", paddingBottom: 30 }}>
+    <div style={{ minHeight: "100vh", background: "#09090f", color: "#e4e4e7", fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: 430, margin: "0 auto", paddingBottom: 90 }}>
 
       {/* Header */}
       <div style={{ padding: "20px 20px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 13, color: "#71717a", letterSpacing: "0.05em" }}>DASHBOARD</div>
-          <div style={{ fontSize: 20, fontWeight: 600, marginTop: 2 }}>Finances</div>
+          <div style={{ fontSize: 13, color: "#52525b", letterSpacing: "0.06em", fontWeight: 500 }}>BILL'S FINANCES</div>
+          <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2, letterSpacing: "-0.01em" }}>Dashboard</div>
         </div>
-        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #34d399 0%, #059669 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#0a0a0f" }}>B</div>
-      </div>
-
-      {/* Net Worth */}
-      <div style={{ margin: "20px 20px 0", padding: 20, background: "linear-gradient(145deg, rgba(52,211,153,0.08) 0%, rgba(16,185,129,0.03) 100%)", border: "1px solid rgba(52,211,153,0.15)", borderRadius: 16 }}>
-        <div style={{ fontSize: 12, color: "#71717a", letterSpacing: "0.05em" }}>NET WORTH</div>
-        <div style={{ fontSize: 32, fontWeight: 700, marginTop: 4, letterSpacing: "-0.02em", color: "#f4f4f5" }}>{"\u00A3"}{totalNetWorth.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
-          <span style={{ color: "#34d399", fontSize: 13, fontWeight: 600 }}>{"\u2191"} {"\u00A3"}2,226.75</span>
-          <span style={{ color: "#71717a", fontSize: 13 }}>this month (+7.4%)</span>
-        </div>
-        <div style={{ marginTop: 14 }}><MiniChart data={NET_WORTH_HISTORY} width={340} height={50} /></div>
-        <div style={{ display: "flex", gap: 16, marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Invested</div><div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{"\u00A3"}{totalInvested.toLocaleString("en-GB")}</div></div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Cash</div><div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{"\u00A3"}{totalCash.toLocaleString("en-GB")}</div></div>
-          <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Alloc</div><div style={{ fontSize: 16, fontWeight: 600, marginTop: 2 }}>{((totalInvested / totalNetWorth) * 100).toFixed(0)}% / {((totalCash / totalNetWorth) * 100).toFixed(0)}%</div></div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, margin: "20px 20px 0", background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 3 }}>
-        {tabs.map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            style={{ flex: 1, padding: "8px 0", border: "none", borderRadius: 8, fontSize: 12, fontWeight: activeTab === tab.id ? 600 : 400, color: activeTab === tab.id ? "#f4f4f5" : "#71717a", background: activeTab === tab.id ? "rgba(255,255,255,0.08)" : "transparent", cursor: "pointer", transition: "all 0.2s" }}>
-            {tab.label}
-          </button>
-        ))}
+        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: "#fff" }}>B</div>
       </div>
 
       {/* ═══ OVERVIEW ═══ */}
       {activeTab === "overview" && (
         <div style={{ padding: "0 20px" }}>
-          <div style={sectionLabel}>ACCOUNTS</div>
+          {/* Net Worth Card */}
+          <div style={{ margin: "20px 0 0", padding: 20, background: "linear-gradient(145deg, rgba(99,102,241,0.08) 0%, rgba(129,140,248,0.03) 100%)", border: "1px solid rgba(99,102,241,0.12)", borderRadius: 18 }}>
+            <div style={{ fontSize: 12, color: "#71717a", letterSpacing: "0.05em", fontWeight: 500 }}>NET WORTH</div>
+            <div style={{ fontSize: 34, fontWeight: 800, marginTop: 4, letterSpacing: "-0.02em", color: "#f4f4f5" }}>{"\u00A3"}{totalNetWorth.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+              <span style={{ color: "#34d399", fontSize: 13, fontWeight: 600 }}>{"\u2191"} {"\u00A3"}2,226.75</span>
+              <span style={{ color: "#71717a", fontSize: 13 }}>this month (+7.4%)</span>
+            </div>
+            <div style={{ marginTop: 14 }}><MiniChart data={NET_WORTH_HISTORY} width={340} height={50} /></div>
+            <div style={{ display: "flex", gap: 12, marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: "#71717a" }}>Invested</div>
+                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{"\u00A3"}{totalInvested.toLocaleString("en-GB")}</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: "#71717a" }}>Cash</div>
+                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{"\u00A3"}{totalCash.toLocaleString("en-GB")}</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: "#71717a" }}>Alloc</div>
+                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 2 }}>{totalNetWorth > 0 ? ((totalInvested / totalNetWorth) * 100).toFixed(0) : 0}% / {totalNetWorth > 0 ? ((totalCash / totalNetWorth) * 100).toFixed(0) : 0}%</div>
+              </div>
+            </div>
+          </div>
 
-          {/* TrueLayer Connect / Status */}
+          {/* Bank connect */}
+          <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500, marginTop: 24, marginBottom: 10 }}>ACCOUNTS</div>
           {tlTokens.length > 0 && (
-            <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, borderColor: "rgba(99,102,241,0.3)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 16 }}>🏦</span>
+            <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, borderColor: "rgba(99,102,241,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(99,102,241,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{"\u{1F3E6}"}</div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "#818cf8" }}>Bank Connected</div>
-                  <div style={{ fontSize: 11, color: "#71717a" }}>{tlTokens.length} bank{tlTokens.length !== 1 ? "s" : ""} · {tlAccounts.length} account{tlAccounts.length !== 1 ? "s" : ""} linked</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#818cf8" }}>{tlTokens.length} Bank{tlTokens.length !== 1 ? "s" : ""} Connected</div>
+                  <div style={{ fontSize: 11, color: "#52525b" }}>{tlAccounts.length} account{tlAccounts.length !== 1 ? "s" : ""} linked</div>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 6 }}>
                 <button onClick={loadBankData} disabled={bankLoading}
-                  style={{ padding: "6px 12px", fontSize: 11, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#a1a1aa", cursor: "pointer" }}>
-                  {bankLoading ? "..." : "Refresh"}
+                  style={{ padding: "6px 10px", fontSize: 11, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, color: "#a1a1aa", cursor: "pointer" }}>
+                  {bankLoading ? "..." : "\u21BB"}
                 </button>
                 <button onClick={disconnectBank}
-                  style={{ padding: "6px 12px", fontSize: 11, background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "#ef4444", cursor: "pointer" }}>
-                  Disconnect
+                  style={{ padding: "6px 10px", fontSize: 11, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 8, color: "#ef4444", cursor: "pointer" }}>
+                  {"\u2715"}
                 </button>
               </div>
             </div>
           )}
           <button onClick={startBankConnect}
-            style={{ width: "100%", padding: "12px 16px", marginBottom: 12, background: tlTokens.length > 0 ? "rgba(99,102,241,0.1)" : "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: tlTokens.length > 0 ? "1px solid rgba(99,102,241,0.3)" : "none", borderRadius: 12, color: tlTokens.length > 0 ? "#818cf8" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>+</span> {tlTokens.length > 0 ? "Add Another Bank" : "Connect Your Bank"}
+            style={{ width: "100%", padding: "13px 16px", marginBottom: 10, background: tlTokens.length > 0 ? "rgba(99,102,241,0.08)" : "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: tlTokens.length > 0 ? "1px solid rgba(99,102,241,0.2)" : "none", borderRadius: 14, color: tlTokens.length > 0 ? "#818cf8" : "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <span>+</span> {tlTokens.length > 0 ? "Add Another Bank" : "Connect Your Bank"}
           </button>
           {bankError && (
-            <div style={{ ...card, marginBottom: 12, borderColor: "rgba(239,68,68,0.3)", color: "#ef4444", fontSize: 12 }}>
-              Error: {bankError}
-            </div>
-          )}
-          {bankLoading && !tlToken && (
-            <div style={{ ...card, marginBottom: 12, textAlign: "center", color: "#71717a", fontSize: 13 }}>
-              Connecting to your bank...
+            <div style={{ ...card, marginBottom: 10, borderColor: "rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.05)", color: "#ef4444", fontSize: 12, padding: "12px 16px" }}>
+              {"\u26A0"} {bankError}
             </div>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {/* Account list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {mergedAccounts.map((acc, i) => (
               <div key={acc.name + i} style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 500 }}>{acc.name}</span>
-                    {acc.source === "truelayer" && <span style={{ fontSize: 9, padding: "1px 5px", background: "rgba(99,102,241,0.15)", color: "#818cf8", borderRadius: 4, fontWeight: 600 }}>LIVE</span>}
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: acc.source === "truelayer" ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+                    {acc.type === "Brokerage" || acc.type === "ISA" ? "\u{1F4C8}" : acc.type === "Crypto" ? "\u{1FA99}" : acc.type === "Private Equity" ? "\u{1F3AF}" : acc.type === "Credit Card" ? "\u{1F4B3}" : "\u{1F3E6}"}
                   </div>
-                  <div style={{ fontSize: 11, color: "#71717a", marginTop: 2 }}>{acc.type}</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{acc.name}</div>
+                    <div style={{ fontSize: 11, color: "#52525b", marginTop: 1 }}>
+                      {acc.type}
+                      {acc.source === "truelayer" && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 5px", background: "rgba(99,102,241,0.12)", color: "#818cf8", borderRadius: 4, fontWeight: 600 }}>LIVE</span>}
+                    </div>
+                  </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{acc.currency === "USD" ? "$" : "\u00A3"}{acc.balance.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div>
-                  {acc.change !== null && acc.change !== 0 && <div style={{ fontSize: 11, color: acc.change >= 0 ? "#34d399" : "#ef4444", marginTop: 2 }}>{acc.change >= 0 ? "\u2191" : "\u2193"} {Math.abs(acc.change)}%</div>}
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>{acc.currency === "USD" ? "$" : "\u00A3"}{acc.balance.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div>
+                  {acc.change !== null && acc.change !== 0 && <div style={{ fontSize: 11, color: acc.change >= 0 ? "#34d399" : "#ef4444", marginTop: 1 }}>{acc.change >= 0 ? "\u2191" : "\u2193"} {Math.abs(acc.change)}%</div>}
                 </div>
               </div>
             ))}
           </div>
 
+          {/* This month summary */}
+          <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500, marginTop: 24, marginBottom: 10 }}>THIS PERIOD</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: "16px 8px" }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Income</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#34d399", marginTop: 6 }}>+{"\u00A3"}{fmt(income)}</div>
+            </div>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: "16px 8px" }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Spending</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#f472b6", marginTop: 6 }}>-{"\u00A3"}{fmt(spending)}</div>
+            </div>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: "16px 8px" }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Saved</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: netFlow >= 0 ? "#34d399" : "#ef4444", marginTop: 6 }}>{netFlow >= 0 ? "+" : ""}{"\u00A3"}{fmt(netFlow)}</div>
+            </div>
+          </div>
+
           {/* Savings Rate */}
-          <div style={sectionLabel}>SAVINGS RATE</div>
-          <div style={{ ...card, padding: 16, display: "flex", alignItems: "center", gap: 16 }}>
-            <SavingsGauge rate={savingsRate} size={76} />
+          <div style={{ ...card, padding: 16, marginTop: 10, display: "flex", alignItems: "center", gap: 16 }}>
+            <SavingsGauge rate={savingsRate} size={72} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 600 }}>
-                {savingsRate >= 50 ? "Solid month" : savingsRate >= 30 ? "Decent" : "Tight month"}
+                {savingsRate >= 50 ? "Great savings rate!" : savingsRate >= 30 ? "Decent month" : savingsRate > 0 ? "Tight month" : "No income yet"}
               </div>
               <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
-                {"\u00A3"}{netFlow.toFixed(0)} saved of {"\u00A3"}{income.toFixed(0)} earned
+                {income > 0 ? `${savingsRate}% of income saved` : "Connect your bank to track"}
               </div>
-              <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 3, marginTop: 10 }}>
                 {MONTHLY_SAVINGS.map((m, i) => (
                   <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flex: 1 }}>
                     <div style={{
-                      height: 24,
+                      height: 20,
                       width: "100%",
                       borderRadius: 3,
-                      background: `rgba(${m.rate >= 50 ? '52,211,153' : m.rate >= 30 ? '251,191,36' : '239,68,68'}, ${Math.max(m.rate / 100, 0.08)})`,
-                      transition: "all 0.3s",
+                      background: `rgba(${m.rate >= 50 ? '52,211,153' : m.rate >= 30 ? '251,191,36' : '239,68,68'}, ${Math.max(m.rate / 100, 0.06)})`,
                     }} />
-                    <span style={{ fontSize: 9, color: "#52525b" }}>{m.month}</span>
+                    <span style={{ fontSize: 8, color: "#3f3f46" }}>{m.month}</span>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-
-          {/* This month summary */}
-          <div style={sectionLabel}>THIS MONTH</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ ...card, flex: 1, textAlign: "center" }}><div style={{ fontSize: 11, color: "#71717a" }}>Income</div><div style={{ fontSize: 16, fontWeight: 700, color: "#34d399", marginTop: 4 }}>+{"\u00A3"}{income.toFixed(0)}</div></div>
-            <div style={{ ...card, flex: 1, textAlign: "center" }}><div style={{ fontSize: 11, color: "#71717a" }}>Spending</div><div style={{ fontSize: 16, fontWeight: 700, color: "#f472b6", marginTop: 4 }}>-{"\u00A3"}{spending.toFixed(0)}</div></div>
-            <div style={{ ...card, flex: 1, textAlign: "center" }}><div style={{ fontSize: 11, color: "#71717a" }}>Net</div><div style={{ fontSize: 16, fontWeight: 700, color: netFlow >= 0 ? "#34d399" : "#ef4444", marginTop: 4 }}>{netFlow >= 0 ? "+" : ""}{"\u00A3"}{netFlow.toFixed(0)}</div></div>
           </div>
         </div>
       )}
@@ -762,70 +708,58 @@ export default function Dashboard() {
       {/* ═══ HOLDINGS ═══ */}
       {activeTab === "holdings" && (
         <div style={{ padding: "0 20px" }}>
-          {/* Portfolio summary */}
-          <div style={sectionLabel}>PORTFOLIO P&L</div>
-          <div style={{ ...card, padding: 16, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500, marginTop: 20, marginBottom: 10 }}>PORTFOLIO P&L</div>
+          <div style={{ ...card, padding: 18, marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <div>
                 <div style={{ fontSize: 11, color: "#71717a" }}>Current Value</div>
-                <div style={{ fontSize: 22, fontWeight: 700, marginTop: 2 }}>{"\u00A3"}{totalCurrentValue.toLocaleString("en-GB")}</div>
+                <div style={{ fontSize: 24, fontWeight: 800, marginTop: 2 }}>{"\u00A3"}{totalCurrentValue.toLocaleString("en-GB")}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 11, color: "#71717a" }}>Total P&L</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: totalPnlAbs >= 0 ? "#34d399" : "#ef4444", marginTop: 2 }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: totalPnlAbs >= 0 ? "#34d399" : "#ef4444", marginTop: 2 }}>
                   {totalPnlAbs >= 0 ? "+" : ""}{"\u00A3"}{totalPnlAbs.toFixed(0)}
                 </div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 16, marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ display: "flex", gap: 16, marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
               <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Cost Basis</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{"\u00A3"}{totalCostBasis.toLocaleString("en-GB")}</div></div>
               <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Return</div><div style={{ fontSize: 14, fontWeight: 600, color: totalPnlPct >= 0 ? "#34d399" : "#ef4444", marginTop: 2 }}>{totalPnlPct >= 0 ? "+" : ""}{totalPnlPct.toFixed(1)}%</div></div>
               <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Positions</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{HOLDINGS.length}</div></div>
             </div>
           </div>
-
-          {/* Sort */}
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-            {[
-              { id: "pnl_abs", label: "P&L (\u00A3)" },
-              { id: "pnl_pct", label: "P&L (%)" },
-              { id: "value", label: "Value" },
-            ].map((s) => (
+            {[{ id: "pnl_abs", label: "P&L (\u00A3)" }, { id: "pnl_pct", label: "P&L (%)" }, { id: "value", label: "Value" }].map((s) => (
               <button key={s.id} onClick={() => setHoldingsSort(s.id)}
-                style={{
-                  padding: "5px 10px", fontSize: 11, border: "none", borderRadius: 6, cursor: "pointer",
-                  background: holdingsSort === s.id ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.04)",
-                  color: holdingsSort === s.id ? "#34d399" : "#71717a",
-                  fontWeight: holdingsSort === s.id ? 600 : 400,
-                }}>
+                style={{ padding: "6px 12px", fontSize: 11, border: "none", borderRadius: 8, cursor: "pointer",
+                  background: holdingsSort === s.id ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
+                  color: holdingsSort === s.id ? "#818cf8" : "#71717a", fontWeight: holdingsSort === s.id ? 600 : 400 }}>
                 {s.label}
               </button>
             ))}
           </div>
-
-          {/* Holdings list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sortedHoldings.map((h) => {
               const pnlAbs = h.value - h.costBasis;
               return (
-                <div key={h.ticker} style={{ ...card, padding: "14px 14px" }}>
+                <div key={h.ticker} style={{ ...card }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: "#34d399", background: "rgba(52,211,153,0.1)", padding: "2px 6px", borderRadius: 4 }}>{h.ticker}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#818cf8", background: "rgba(99,102,241,0.12)", padding: "2px 7px", borderRadius: 5 }}>{h.ticker}</span>
                           <span style={{ fontSize: 13, color: "#a1a1aa" }}>{h.name}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: "#52525b", marginTop: 3 }}>{h.account === "T212" ? "Trading 212" : h.account}</div>
+                        <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 3 }}>{h.account === "T212" ? "Trading 212" : h.account}</div>
                       </div>
                     </div>
                     <Sparkline data={h.sparkline} width={56} height={22} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                    <div><div style={{ fontSize: 10, color: "#52525b" }}>Value</div><div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{h.value.toLocaleString()}</div></div>
-                    <div><div style={{ fontSize: 10, color: "#52525b" }}>Cost</div><div style={{ fontSize: 13, fontWeight: 500, color: "#a1a1aa" }}>{"\u00A3"}{h.costBasis.toLocaleString()}</div></div>
+                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Value</div><div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{h.value.toLocaleString()}</div></div>
+                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Cost</div><div style={{ fontSize: 13, fontWeight: 500, color: "#71717a" }}>{"\u00A3"}{h.costBasis.toLocaleString()}</div></div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 10, color: "#52525b" }}>P&L</div>
+                      <div style={{ fontSize: 10, color: "#3f3f46" }}>P&L</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: pnlAbs >= 0 ? "#34d399" : "#ef4444" }}>
                         {pnlAbs >= 0 ? "+" : ""}{"\u00A3"}{pnlAbs.toFixed(0)} ({h.pnl >= 0 ? "+" : ""}{h.pnl}%)
                       </div>
@@ -840,12 +774,13 @@ export default function Dashboard() {
 
       {/* ═══ TRANSACTIONS ═══ */}
       {activeTab === "transactions" && (() => {
+        const uniqueCats = [...new Set(allTransactions.map(t => t.categoryId))].map(id => getCat(id));
         const filtered = allTransactions.filter((t) => {
           if (txSearch && !t.merchant.toLowerCase().includes(txSearch.toLowerCase())) return false;
           if (selectedAccounts && selectedAccounts.length > 0 && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
+          if (txCategoryFilter && t.categoryId !== txCategoryFilter) return false;
           return true;
         });
-        // Group by date
         const groups = {};
         filtered.forEach((t) => {
           const key = t.date;
@@ -857,50 +792,71 @@ export default function Dashboard() {
 
         return (
         <div style={{ padding: "0 20px" }}>
-          {/* Search + filter */}
-          <div style={{ display: "flex", gap: 8, marginTop: 20, marginBottom: 16 }}>
+          {/* Search bar */}
+          <div style={{ display: "flex", gap: 8, marginTop: 16, marginBottom: 12 }}>
             <div style={{ flex: 1, position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#52525b", fontSize: 14 }}>{"\u{1F50D}"}</span>
-              <input placeholder="Search" value={txSearch} onChange={(e) => setTxSearch(e.target.value)}
-                style={{ width: "100%", padding: "10px 10px 10px 36px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#e4e4e7", fontSize: 13 }} />
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#3f3f46", fontSize: 14 }}>{"\u{1F50D}"}</span>
+              <input placeholder="Search transactions..." value={txSearch} onChange={(e) => setTxSearch(e.target.value)}
+                style={{ width: "100%", padding: "11px 10px 11px 38px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, color: "#e4e4e7", fontSize: 14, outline: "none" }} />
             </div>
             <button onClick={() => setShowAccountFilter(true)}
-              style={{ padding: "10px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, color: "#818cf8", fontSize: 14, cursor: "pointer" }}>
+              style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, cursor: "pointer", fontSize: 16, color: selectedAccounts && selectedAccounts.length > 0 ? "#818cf8" : "#52525b" }}>
               {"\u{1F3E6}"}
             </button>
           </div>
 
-          {/* Transaction groups by date */}
+          {/* Category filter chips */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
+            <button onClick={() => setTxCategoryFilter(null)}
+              style={{ padding: "6px 14px", fontSize: 12, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                background: !txCategoryFilter ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.04)",
+                color: !txCategoryFilter ? "#818cf8" : "#71717a", fontWeight: !txCategoryFilter ? 600 : 400 }}>
+              All
+            </button>
+            {uniqueCats.map((cat) => (
+              <button key={cat.id} onClick={() => setTxCategoryFilter(txCategoryFilter === cat.id ? null : cat.id)}
+                style={{ padding: "6px 12px", fontSize: 12, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
+                  background: txCategoryFilter === cat.id ? `${cat.color}22` : "rgba(255,255,255,0.04)",
+                  color: txCategoryFilter === cat.id ? cat.color : "#71717a", fontWeight: txCategoryFilter === cat.id ? 600 : 400 }}>
+                <span style={{ fontSize: 12 }}>{cat.icon}</span> {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Transaction groups */}
           {dateKeys.map((date) => {
             const group = groups[date];
             return (
               <div key={date}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#818cf8" }}>{date}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: group.total >= 0 ? "#34d399" : "#e4e4e7" }}>
-                    {group.total >= 0 ? "+" : ""}{"\u00A3"}{Math.abs(group.total).toFixed(2)}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0 8px" }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#71717a" }}>{formatDateHeader(date)}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: group.total >= 0 ? "#34d399" : "#a1a1aa" }}>
+                    {group.total >= 0 ? "+" : "-"}{"\u00A3"}{fmt(group.total)}
                   </span>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  {group.txns.map((tx) => {
+                <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 8 }}>
+                  {group.txns.map((tx, i) => {
                     const cat = getCat(tx.categoryId);
                     return (
-                      <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+                      <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < group.txns.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
                           {cat.icon}
                         </div>
                         <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
-                          <button onClick={() => setEditingTx(tx.id)}
-                            style={{ fontSize: 12, color: cat.color, background: "none", border: "none", padding: 0, cursor: "pointer", marginTop: 2 }}>
-                            {cat.label} {"\u270E"}
-                          </button>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                            <button onClick={(e) => { e.stopPropagation(); setEditingTx(tx.id); }}
+                              style={{ fontSize: 11, color: cat.color, background: `${cat.color}10`, border: "none", padding: "2px 8px", borderRadius: 10, cursor: "pointer", fontWeight: 500 }}>
+                              {cat.label}
+                            </button>
+                            {tx.accountName && <span style={{ fontSize: 10, color: "#3f3f46" }}>{tx.accountName}</span>}
+                          </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7" }}>
-                            {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{Math.abs(tx.amount).toFixed(2)}
+                          <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7" }}>
+                            {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
                           </div>
-                          {tx.accountName && <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>{tx.accountName}</div>}
+                          {tx.pending && <div style={{ fontSize: 9, color: "#fbbf24", marginTop: 1, fontWeight: 500 }}>PENDING</div>}
                         </div>
                       </div>
                     );
@@ -909,7 +865,13 @@ export default function Dashboard() {
               </div>
             );
           })}
-          {filtered.length === 0 && <div style={{ textAlign: "center", padding: 40, color: "#52525b", fontSize: 13 }}>No transactions found</div>}
+          {filtered.length === 0 && (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#3f3f46" }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>{"\u{1F4B3}"}</div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{allTransactions.length === 0 ? "No transactions yet" : "No matching transactions"}</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>{allTransactions.length === 0 ? "Connect your bank to see transactions" : "Try adjusting your search or filters"}</div>
+            </div>
+          )}
         </div>
         );
       })()}
@@ -918,143 +880,170 @@ export default function Dashboard() {
       {activeTab === "budget" && (
         <div style={{ padding: "0 20px" }}>
           {/* Period badge */}
-          <div style={{ display: "inline-block", padding: "6px 14px", background: "rgba(255,255,255,0.04)", borderRadius: 20, fontSize: 13, color: "#a1a1aa", margin: "20px 0 16px" }}>
-            {budgetPeriod.start} - {budgetPeriod.end}
-          </div>
-
-          {/* Donut + summary */}
-          <div style={{ ...card, padding: 24, marginBottom: 16, textAlign: "center" }}>
-            <DonutChart spent={variableSpend} committed={committedSpend} total={totalBudget} size={200} />
-            <div style={{ marginTop: 20 }}>
-              {totalSpend > totalBudget ? (
-                <>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#ef4444" }}>{"\u00A3"}{(totalSpend - totalBudget).toFixed(2)}</div>
-                  <div style={{ fontSize: 12, color: "#71717a" }}>over your budget of {"\u00A3"}{totalBudget.toFixed(2)}</div>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#34d399" }}>{"\u00A3"}{(totalBudget - totalSpend).toFixed(2)}</div>
-                  <div style={{ fontSize: 12, color: "#71717a" }}>left of {"\u00A3"}{totalBudget.toFixed(2)} budget</div>
-                </>
-              )}
-            </div>
-            <div style={{ display: "flex", justifyContent: "center", gap: 30, marginTop: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#818cf8" }} />
-                <div style={{ textAlign: "left" }}><div style={{ fontSize: 13, fontWeight: 600 }}>Spending</div><div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{variableSpend.toFixed(2)}</div></div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#c084fc" }} />
-                <div style={{ textAlign: "left" }}><div style={{ fontSize: 13, fontWeight: 600 }}>Committed</div><div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{committedSpend.toFixed(2)}</div></div>
-              </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", margin: "20px 0 16px" }}>
+            <div style={{ padding: "7px 18px", background: "rgba(99,102,241,0.1)", borderRadius: 20, fontSize: 13, color: "#818cf8", fontWeight: 500 }}>
+              {budgetPeriodLabel}
             </div>
           </div>
 
-          {/* Daily allowance card */}
-          <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, padding: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20 }}>{"\u{1F4C5}"}</span>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Daily allowance</div>
-                <div style={{ fontSize: 12, color: "#71717a" }}>Until {budgetPeriod.end} {"\u00B7"} {daysLeft} days left</div>
+          {/* Donut chart with multi-segment */}
+          <div style={{ ...card, padding: "24px 16px", marginBottom: 14, textAlign: "center" }}>
+            <DonutChart
+              segments={[
+                ...budgetedCats.filter(c => categorySpending[c.id]?.total > 0).map(c => ({
+                  value: categorySpending[c.id]?.total || 0,
+                  color: c.color,
+                })),
+                ...(totalBudget > totalSpend ? [{ value: totalBudget - totalSpend, color: "rgba(255,255,255,0.04)" }] : []),
+              ]}
+              centerAmount={totalSpend > totalBudget
+                ? `\u00A3${fmt(totalSpend - totalBudget)}`
+                : `\u00A3${fmt(totalBudget - totalSpend)}`
+              }
+              centerLabel={totalSpend > totalBudget ? "over budget" : `left of \u00A3${totalBudget.toFixed(0)}`}
+              size={200}
+            />
+
+            {/* Legend */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#818cf8" }} />
+                <div style={{ fontSize: 12, color: "#a1a1aa" }}>Spent {"\u00A3"}{fmt(variableSpend)}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#c084fc" }} />
+                <div style={{ fontSize: 12, color: "#a1a1aa" }}>Committed {"\u00A3"}{fmt(committedSpend)}</div>
               </div>
             </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: dailyAllowance > 0 ? "#34d399" : "#ef4444" }}>{"\u00A3"}{dailyAllowance.toFixed(2)}</div>
+          </div>
+
+          {/* Daily allowance + pace */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <div style={{ ...card, flex: 1, padding: "16px 14px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#71717a", marginBottom: 6 }}>Daily Budget</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: dailyAllowance > 15 ? "#34d399" : dailyAllowance > 0 ? "#fbbf24" : "#ef4444" }}>
+                {"\u00A3"}{dailyAllowance.toFixed(2)}
+              </div>
+              <div style={{ fontSize: 11, color: "#52525b", marginTop: 4 }}>{daysLeft} days left</div>
+            </div>
+            <div style={{ ...card, flex: 1, padding: "16px 14px", textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#71717a", marginBottom: 6 }}>Spending Pace</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: spendingPace <= totalBudget ? "#34d399" : "#ef4444" }}>
+                {spendingPace <= totalBudget ? "On Track" : "Over"}
+              </div>
+              <div style={{ fontSize: 11, color: "#52525b", marginTop: 4 }}>
+                {dayOfPeriod > 0 ? `\u00A3${(totalSpend / dayOfPeriod).toFixed(0)}/day avg` : ""}
+              </div>
+            </div>
           </div>
 
           {/* Recurring */}
-          <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>RECURRING</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, marginTop: 20 }}>
+            <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>RECURRING</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "#a1a1aa", fontSize: 12 }}>{"\u00A3"}{recurringTotal.toFixed(2)}/mo</span>
+              <span style={{ color: "#71717a", fontSize: 12, fontWeight: 500 }}>{"\u00A3"}{recurringTotal.toFixed(2)}/mo</span>
               <button onClick={() => setEditingRecurring(editingRecurring === "all" ? null : "all")}
                 style={{ background: "none", border: "none", color: "#818cf8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
                 {editingRecurring === "all" ? "Done" : "Edit"}
               </button>
             </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 16 }}>
-            {recurring.map((r) => {
+          <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 14 }}>
+            {recurring.map((r, i) => {
               const cat = getCat(r.categoryId);
               return (
-                <div key={r.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                <div key={r.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < recurring.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{cat.icon}</div>
                   <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
                     {editingRecurring === "all" ? (
                       <input defaultValue={r.merchant} onBlur={(e) => updateRecurringItem(r.id, "merchant", e.target.value)}
-                        style={{ width: "100%", padding: "2px 4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, color: "#e4e4e7", fontSize: 14 }} />
+                        style={{ width: "100%", padding: "2px 4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 4, color: "#e4e4e7", fontSize: 14 }} />
                     ) : (
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{r.merchant}</div>
                     )}
-                    <div style={{ fontSize: 12, color: "#52525b", marginTop: 2 }}>{r.frequency}{r.nextDate ? ` \u00B7 Next: ${r.nextDate}` : ""}</div>
+                    <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 2 }}>{r.frequency}{r.nextDate ? ` \u00B7 ${r.nextDate}` : ""}</div>
                   </div>
                   {editingRecurring === "all" ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontSize: 12, color: "#52525b" }}>{"\u00A3"}</span>
                       <input type="number" defaultValue={r.amount} onBlur={(e) => updateRecurringItem(r.id, "amount", e.target.value)}
-                        style={{ width: 60, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "#e4e4e7", fontSize: 13, textAlign: "right" }} />
+                        style={{ width: 60, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: "#e4e4e7", fontSize: 13, textAlign: "right" }} />
                       <button onClick={() => deleteRecurringItem(r.id)}
-                        style={{ background: "none", border: "none", color: "#ef4444", fontSize: 16, cursor: "pointer", padding: "0 4px" }}>{"\u2715"}</button>
+                        style={{ background: "none", border: "none", color: "#ef4444", fontSize: 14, cursor: "pointer", padding: "0 2px" }}>{"\u2715"}</button>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{r.amount.toFixed(2)}</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#a1a1aa" }}>{"\u00A3"}{r.amount.toFixed(2)}</div>
                   )}
                 </div>
               );
             })}
-            {editingRecurring === "all" && (
-              <button onClick={addRecurringItem}
-                style={{ padding: "12px", marginTop: 8, background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 10, color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
-                + Add recurring item
-              </button>
-            )}
           </div>
+          {editingRecurring === "all" && (
+            <button onClick={addRecurringItem}
+              style={{ width: "100%", padding: "12px", marginBottom: 14, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.08)", borderRadius: 14, color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+              + Add recurring item
+            </button>
+          )}
 
-          {/* Category budgets — Emma style */}
-          <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: "#818cf8" }}>Category budgets</span>
+          {/* Category budgets */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, marginTop: 20 }}>
+            <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>CATEGORY BUDGETS</div>
             <button onClick={() => setEditingBudget(editingBudget === "all" ? null : "all")}
               style={{ background: "none", border: "none", color: "#818cf8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-              {editingBudget === "all" ? "Done" : "Edit \u25B6"}
+              {editingBudget === "all" ? "Done" : "Edit"}
             </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id)).sort((a, b) => (categorySpending[b.id]?.total || 0) - (categorySpending[a.id]?.total || 0)).map((cat) => {
+          <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+            {CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id))
+              .sort((a, b) => (categorySpending[b.id]?.total || 0) - (categorySpending[a.id]?.total || 0))
+              .map((cat, i, arr) => {
               const budget = getBudget(cat.id);
               const spent = categorySpending[cat.id]?.total || 0;
               const isOver = budget > 0 && spent > budget;
-              const left = budget - spent;
+              const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
               if (!editingBudget && budget === 0 && spent === 0) return null;
               return (
-                <div key={cat.id} onClick={() => !editingBudget && spent > 0 && setDrillCategory(cat.id)} style={{ padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: spent > 0 && !editingBudget ? "pointer" : "default" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <div key={cat.id}
+                  onClick={() => !editingBudget && spent > 0 && (() => { setDrillCategory(cat.id); setDrillSource("budget"); })()}
+                  style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: spent > 0 && !editingBudget ? "pointer" : "default" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: 14, fontWeight: 600 }}>{cat.label}</span>
                         {editingBudget === "all" ? (
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}</span>
+                            <span style={{ fontSize: 12, color: "#52525b" }}>{"\u00A3"}</span>
                             <input type="number" defaultValue={budget} onBlur={(e) => saveBudget(cat.id, e.target.value)}
-                              style={{ width: 70, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "#e4e4e7", fontSize: 14, fontWeight: 600, textAlign: "right" }} />
+                              style={{ width: 70, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: "#e4e4e7", fontSize: 14, fontWeight: 600, textAlign: "right" }} />
                           </div>
                         ) : (
-                          <span style={{ fontSize: 14, fontWeight: 600 }}>{spent > 0 ? `-\u00A3${spent.toFixed(2)}` : "\u00A30.00"}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: isOver ? "#ef4444" : "#e4e4e7" }}>
+                              {"\u00A3"}{fmt(spent)}
+                            </span>
+                            {spent > 0 && <span style={{ color: "#3f3f46", fontSize: 14 }}>{"\u203A"}</span>}
+                          </div>
                         )}
                       </div>
                       {budget > 0 && !editingBudget && (
-                        <div style={{ fontSize: 12, color: isOver ? "#ef4444" : "#71717a", marginTop: 2 }}>
-                          {isOver ? `\u00A3${(spent - budget).toFixed(2)} over your budget of \u00A3${budget.toFixed(2)}` : `\u00A3${left.toFixed(2)} left of \u00A3${budget.toFixed(2)}`}
-                        </div>
+                        <>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                            <span style={{ fontSize: 11, color: isOver ? "#ef4444" : "#52525b" }}>
+                              {isOver ? `\u00A3${fmt(spent - budget)} over` : `\u00A3${fmt(budget - spent)} left`}
+                            </span>
+                            <span style={{ fontSize: 11, color: "#3f3f46" }}>of {"\u00A3"}{budget}</span>
+                          </div>
+                          <div style={{ marginTop: 6, height: 4, background: "rgba(255,255,255,0.04)", borderRadius: 2 }}>
+                            <div style={{ width: `${pct}%`, height: "100%", background: isOver ? "#ef4444" : cat.color, borderRadius: 2, transition: "width 0.4s" }} />
+                          </div>
+                        </>
                       )}
-                      {budget === 0 && !editingBudget && <div style={{ fontSize: 12, color: "#52525b" }}>No budget set</div>}
+                      {budget === 0 && !editingBudget && spent > 0 && (
+                        <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 2 }}>No budget set</div>
+                      )}
                     </div>
                   </div>
-                  {budget > 0 && !editingBudget && (
-                    <div style={{ marginLeft: 52, width: "calc(100% - 52px)", height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2 }}>
-                      <div style={{ width: `${Math.min((spent / budget) * 100, 100)}%`, height: "100%", background: isOver ? "#ef4444" : cat.color, borderRadius: 2, transition: "width 0.4s" }} />
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -1079,13 +1068,8 @@ export default function Dashboard() {
         } else {
           cutoff = new Date(now.getTime() - (ranges[analyticsRange]?.days || 30) * 86400000);
         }
-        const parseDate = (d) => {
-          const parts = d.split(" ");
-          const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
-          return new Date(now.getFullYear(), months[parts[1]] ?? 0, parseInt(parts[0]) || 1);
-        };
         const filteredTxns = allTransactions.filter((t) => {
-          const d = parseDate(t.date);
+          const d = parseTxDate(t.date);
           if (selectedAccounts && selectedAccounts.length > 0 && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
           return d >= cutoff && d <= cutoffEnd;
         });
@@ -1095,7 +1079,6 @@ export default function Dashboard() {
         const fSpending = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
         const fNet = fIncome - fSpending;
 
-        // Category breakdown
         const catMap = {};
         spendTxns.forEach((t) => {
           if (!catMap[t.categoryId]) catMap[t.categoryId] = { total: 0, count: 0 };
@@ -1104,47 +1087,56 @@ export default function Dashboard() {
         });
         const sortedCats = CATEGORIES.filter((c) => catMap[c.id]).sort((a, b) => (catMap[b.id]?.total || 0) - (catMap[a.id]?.total || 0));
 
-        // Merchant breakdown
         const merchantMap = {};
         spendTxns.forEach((t) => {
-          if (!merchantMap[t.merchant]) merchantMap[t.merchant] = { total: 0, count: 0 };
+          if (!merchantMap[t.merchant]) merchantMap[t.merchant] = { total: 0, count: 0, categoryId: t.categoryId };
           merchantMap[t.merchant].total += Math.abs(t.amount);
           merchantMap[t.merchant].count += 1;
         });
         const sortedMerchants = Object.entries(merchantMap).sort((a, b) => b[1].total - a[1].total);
 
+        // Income by source
+        const incomeMap = {};
+        incomeTxns.forEach((t) => {
+          const key = t.merchant;
+          if (!incomeMap[key]) incomeMap[key] = { total: 0, count: 0 };
+          incomeMap[key].total += t.amount;
+          incomeMap[key].count += 1;
+        });
+        const sortedIncome = Object.entries(incomeMap).sort((a, b) => b[1].total - a[1].total);
+
         const daysInRange = analyticsRange === "custom" ? Math.max(Math.ceil((cutoffEnd - cutoff) / 86400000), 1) : Math.max(ranges[analyticsRange]?.days || 30, 1);
         const dailyAvg = fSpending / Math.min(daysInRange, 365);
 
-        // Period label
         const periodLabel = analyticsRange === "custom" && customDateFrom
           ? `${new Date(customDateFrom).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${customDateTo ? new Date(customDateTo).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "Now"}`
           : `${cutoff.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} - ${now.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
 
+        const maxCat = sortedCats.length > 0 ? catMap[sortedCats[0].id].total : 1;
+
         return (
         <div style={{ padding: "0 20px" }}>
-          {/* Period badge + filter icons */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0 12px" }}>
+          {/* Period + filter */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "16px 0 12px" }}>
             <button onClick={() => setShowPeriodPicker(!showPeriodPicker)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, fontSize: 13, color: "#a1a1aa", cursor: "pointer" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.15)", borderRadius: 20, fontSize: 13, color: "#818cf8", cursor: "pointer", fontWeight: 500 }}>
               {periodLabel} {"\u25BE"}
             </button>
             <button onClick={() => setShowAccountFilter(true)}
-              style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "50%", cursor: "pointer", fontSize: 14, color: "#71717a" }}>
+              style={{ width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "50%", cursor: "pointer", fontSize: 14, color: "#52525b" }}>
               {"\u{1F3E6}"}
             </button>
           </div>
 
-          {/* Period picker dropdown */}
+          {/* Period picker */}
           {showPeriodPicker && (
-            <div style={{ ...card, padding: 16, marginBottom: 16 }}>
-              <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <div style={{ ...card, padding: 14, marginBottom: 14 }}>
+              <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
                 {Object.entries(ranges).map(([key, { label }]) => (
                   <button key={key} onClick={() => { setAnalyticsRange(key); if (key !== "custom") setShowPeriodPicker(false); }}
-                    style={{ flex: 1, padding: "8px 0", fontSize: 12, border: "none", borderRadius: 8, cursor: "pointer",
-                      background: analyticsRange === key ? "rgba(129,140,248,0.2)" : "rgba(255,255,255,0.04)",
-                      color: analyticsRange === key ? "#818cf8" : "#71717a",
-                      fontWeight: analyticsRange === key ? 600 : 400 }}>
+                    style={{ flex: 1, padding: "8px 0", fontSize: 11, border: "none", borderRadius: 8, cursor: "pointer",
+                      background: analyticsRange === key ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
+                      color: analyticsRange === key ? "#818cf8" : "#71717a", fontWeight: analyticsRange === key ? 600 : 400 }}>
                     {label}
                   </button>
                 ))}
@@ -1152,71 +1144,129 @@ export default function Dashboard() {
               {analyticsRange === "custom" && (
                 <div style={{ display: "flex", gap: 8 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>From</div>
+                    <div style={{ fontSize: 10, color: "#52525b", marginBottom: 4 }}>From</div>
                     <input type="date" value={customDateFrom} onChange={(e) => setCustomDateFrom(e.target.value)}
-                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
+                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>To</div>
+                    <div style={{ fontSize: 10, color: "#52525b", marginBottom: 4 }}>To</div>
                     <input type="date" value={customDateTo} onChange={(e) => setCustomDateTo(e.target.value)}
-                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
+                      style={{ width: "100%", padding: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Summary card */}
-          <div style={{ ...card, padding: 24, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: "#71717a" }}>Summary</div>
-            <div style={{ fontSize: 30, fontWeight: 700, marginTop: 4, color: fNet >= 0 ? "#34d399" : "#e4e4e7" }}>{fNet >= 0 ? "+" : ""}{"\u00A3"}{Math.abs(fNet).toFixed(2)}</div>
-            <BarChart income={fIncome} spending={fSpending} maxVal={Math.max(fIncome, fSpending) * 1.1} />
-            <div style={{ display: "flex", justifyContent: "center", gap: 30, marginTop: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#22d3ee" }} />
-                <div><div style={{ fontSize: 12, color: "#71717a" }}>Income</div><div style={{ fontSize: 15, fontWeight: 600 }}>{"\u00A3"}{fIncome.toFixed(2)}</div></div>
+          {/* Summary card with bar chart */}
+          <div style={{ ...card, padding: "20px 16px", marginBottom: 14 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 12, color: "#71717a", fontWeight: 500 }}>Net Flow</div>
+              <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4, color: fNet >= 0 ? "#34d399" : "#ef4444" }}>
+                {fNet >= 0 ? "+" : "-"}{"\u00A3"}{fmt(fNet)}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#f472b6" }} />
-                <div><div style={{ fontSize: 12, color: "#71717a" }}>Spending</div><div style={{ fontSize: 15, fontWeight: 600 }}>{"\u00A3"}{fSpending.toFixed(2)}</div></div>
+            </div>
+            <BarChart income={fIncome} spending={fSpending} maxVal={Math.max(fIncome, fSpending) * 1.15 || 1} />
+          </div>
+
+          {/* Quick stats row */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Daily Avg</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#f472b6", marginTop: 4 }}>{"\u00A3"}{dailyAvg.toFixed(2)}</div>
+            </div>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Txns</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{spendTxns.length}</div>
+            </div>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Savings</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: fIncome > 0 ? (fNet / fIncome > 0.2 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 4 }}>
+                {fIncome > 0 ? Math.round((fNet / fIncome) * 100) : 0}%
               </div>
             </div>
           </div>
 
           {/* Category / Merchant toggle */}
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: 3, marginBottom: 16 }}>
-            {[{ id: "category", label: "Category" }, { id: "merchant", label: "Merchant" }].map((v) => (
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: 3, marginBottom: 14 }}>
+            {[{ id: "category", label: "By Category" }, { id: "merchant", label: "By Merchant" }].map((v) => (
               <button key={v.id} onClick={() => setAnalyticsView(v.id)}
-                style={{ flex: 1, padding: "9px 0", fontSize: 13, fontWeight: 600, border: "none", borderRadius: 8, cursor: "pointer",
-                  background: analyticsView === v.id ? "rgba(129,140,248,0.15)" : "transparent",
-                  color: analyticsView === v.id ? "#818cf8" : "#71717a" }}>
+                style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, border: "none", borderRadius: 10, cursor: "pointer",
+                  background: analyticsView === v.id ? "rgba(99,102,241,0.12)" : "transparent",
+                  color: analyticsView === v.id ? "#818cf8" : "#52525b" }}>
                 {v.label}
               </button>
             ))}
           </div>
 
-          {/* Spending header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#818cf8" }}>Spending</span>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{fSpending.toFixed(2)}</span>
+          {/* Spending breakdown */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>SPENDING</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#f472b6" }}>-{"\u00A3"}{fmt(fSpending)}</span>
           </div>
 
-          {/* Category view */}
+          {/* Category view with percentage bars */}
           {analyticsView === "category" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 20 }}>
-              {sortedCats.map((cat) => {
+            <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+              {sortedCats.map((cat, i) => {
                 const data = catMap[cat.id];
                 const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
                 return (
-                  <div key={cat.id} onClick={() => setDrillCategory(cat.id)} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: "pointer" }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
-                    <div style={{ flex: 1, marginLeft: 12 }}>
-                      <div style={{ fontSize: 14, fontWeight: 500 }}>{cat.label}</div>
-                      <div style={{ fontSize: 12, color: "#71717a" }}>{data.count} Transaction{data.count !== 1 ? "s" : ""}</div>
+                  <div key={cat.id} onClick={() => { setDrillCategory(cat.id); setDrillSource("analytics"); }}
+                    style={{ padding: "14px 16px", borderBottom: i < sortedCats.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none", cursor: "pointer" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 14, fontWeight: 500 }}>{cat.label}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{fmt(data.total)}</span>
+                            <span style={{ color: "#3f3f46", fontSize: 14 }}>{"\u203A"}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                          <span style={{ fontSize: 11, color: "#52525b" }}>{data.count} txn{data.count !== 1 ? "s" : ""}</span>
+                          <span style={{ fontSize: 11, color: cat.color, fontWeight: 500 }}>{pct.toFixed(1)}%</span>
+                        </div>
+                        <div style={{ marginTop: 6, height: 3, background: "rgba(255,255,255,0.04)", borderRadius: 2 }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: cat.color, borderRadius: 2, transition: "width 0.4s" }} />
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
-                      <span style={{ color: "#52525b", fontSize: 12 }}>{"\u203A"}</span>
+                  </div>
+                );
+              })}
+              {sortedCats.length === 0 && (
+                <div style={{ padding: "30px 16px", textAlign: "center", color: "#3f3f46", fontSize: 13 }}>No spending data for this period</div>
+              )}
+            </div>
+          )}
+
+          {/* Merchant view */}
+          {analyticsView === "merchant" && (
+            <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+              {sortedMerchants.map(([name, data], i) => {
+                const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
+                const cat = getCat(data.categoryId);
+                return (
+                  <div key={name} style={{ padding: "14px 16px", borderBottom: i < sortedMerchants.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: cat.color, flexShrink: 0 }}>
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{"\u00A3"}{fmt(data.total)}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                          <span style={{ fontSize: 11, color: "#52525b" }}>{data.count} txn{data.count !== 1 ? "s" : ""} {"\u00B7"} {cat.label}</span>
+                          <span style={{ fontSize: 11, color: "#52525b" }}>{pct.toFixed(1)}%</span>
+                        </div>
+                        <div style={{ marginTop: 6, height: 3, background: "rgba(255,255,255,0.04)", borderRadius: 2 }}>
+                          <div style={{ width: `${pct}%`, height: "100%", background: cat.color, borderRadius: 2, transition: "width 0.4s" }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1224,85 +1274,63 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Merchant view */}
-          {analyticsView === "merchant" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 20 }}>
-              {sortedMerchants.map(([name, data]) => (
-                <div key={name} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#71717a", flexShrink: 0 }}>
-                    {name.charAt(0).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1, marginLeft: 12 }}>
+          {/* Income section */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>INCOME</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#34d399" }}>+{"\u00A3"}{fmt(fIncome)}</span>
+          </div>
+          {sortedIncome.length > 0 ? (
+            <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+              {sortedIncome.map(([name, data], i) => (
+                <div key={name} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < sortedIncome.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(52,211,153,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{"\u{1F4B0}"}</div>
+                  <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 500 }}>{name}</div>
-                    <div style={{ fontSize: 12, color: "#71717a" }}>{data.count} Transaction{data.count !== 1 ? "s" : ""}</div>
+                    <div style={{ fontSize: 11, color: "#52525b" }}>{data.count} payment{data.count !== 1 ? "s" : ""}</div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>+{"\u00A3"}{fmt(data.total)}</div>
                 </div>
               ))}
             </div>
-          )}
-
-          {/* Income section */}
-          {incomeTxns.length > 0 && (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>Income</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>+{"\u00A3"}{fIncome.toFixed(2)}</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 20 }}>
-                {incomeTxns.map((tx) => {
-                  const cat = getCat(tx.categoryId);
-                  return (
-                    <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(52,211,153,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
-                      <div style={{ flex: 1, marginLeft: 12 }}>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{tx.merchant}</div>
-                        <div style={{ fontSize: 12, color: "#71717a" }}>{tx.date}</div>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#34d399" }}>+{"\u00A3"}{tx.amount.toFixed(2)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* Quick stats */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: 16 }}>
-              <div style={{ fontSize: 12, color: "#71717a" }}>Daily Avg</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#f472b6", marginTop: 6 }}>{"\u00A3"}{dailyAvg.toFixed(2)}</div>
+          ) : (
+            <div style={{ ...card, padding: "24px 16px", textAlign: "center", color: "#3f3f46", fontSize: 13, marginBottom: 16 }}>
+              No income recorded this period
             </div>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: 16 }}>
-              <div style={{ fontSize: 12, color: "#71717a" }}>Savings Rate</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: fIncome > 0 ? (fNet / fIncome > 0.2 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 6 }}>{fIncome > 0 ? Math.round((fNet / fIncome) * 100) : 0}%</div>
-            </div>
-          </div>
+          )}
 
           {/* Insights */}
           {sortedCats.length > 0 && (
             <>
-              <div style={sectionLabel}>INSIGHTS</div>
+              <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500, marginBottom: 10 }}>INSIGHTS</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-                <div style={{ ...card, padding: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Biggest category</div>
-                  <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
-                    {sortedCats[0].icon} {sortedCats[0].label} is {fSpending > 0 ? ((catMap[sortedCats[0].id].total / fSpending) * 100).toFixed(0) : 0}% of spending
+                <div style={{ ...card, padding: 14, display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ fontSize: 24 }}>{sortedCats[0].icon}</div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Biggest category</div>
+                    <div style={{ fontSize: 12, color: "#71717a", marginTop: 2 }}>
+                      {sortedCats[0].label} accounts for {fSpending > 0 ? ((catMap[sortedCats[0].id].total / fSpending) * 100).toFixed(0) : 0}% of spending ({"\u00A3"}{fmt(catMap[sortedCats[0].id].total)})
+                    </div>
                   </div>
                 </div>
                 {sortedMerchants.length > 0 && (
-                  <div style={{ ...card, padding: 14 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>Most visited</div>
-                    <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
-                      {sortedMerchants[0][0]} — {sortedMerchants[0][1].count} visits, {"\u00A3"}{sortedMerchants[0][1].total.toFixed(2)}
+                  <div style={{ ...card, padding: 14, display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ fontSize: 24 }}>{"\u{1F3AA}"}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>Most frequent</div>
+                      <div style={{ fontSize: 12, color: "#71717a", marginTop: 2 }}>
+                        {sortedMerchants[0][0]} {"\u2014"} {sortedMerchants[0][1].count} visit{sortedMerchants[0][1].count !== 1 ? "s" : ""}, {"\u00A3"}{fmt(sortedMerchants[0][1].total)}
+                      </div>
                     </div>
                   </div>
                 )}
                 {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).length > 0 && (
-                  <div style={{ ...card, padding: 14, borderColor: "rgba(239,68,68,0.3)" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#ef4444" }}>Over budget</div>
-                    <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
-                      {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).map((c) => `${c.icon} ${c.label}`).join(", ")}
+                  <div style={{ ...card, padding: 14, borderColor: "rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.03)", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ fontSize: 24 }}>{"\u26A0\uFE0F"}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#ef4444" }}>Over budget</div>
+                      <div style={{ fontSize: 12, color: "#71717a", marginTop: 2 }}>
+                        {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).map((c) => `${c.icon} ${c.label}`).join(", ")}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1312,6 +1340,8 @@ export default function Dashboard() {
         </div>
         );
       })()}
+
+      {/* ═══ MODALS ═══ */}
 
       {/* Account filter modal */}
       {showAccountFilter && (() => {
@@ -1323,83 +1353,121 @@ export default function Dashboard() {
           localStorage.setItem("selected_accounts", JSON.stringify(updated));
         };
         return (
-          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-            <div onClick={() => setShowAccountFilter(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
-            <div style={{ position: "relative", width: "100%", maxWidth: 430, background: "#1a1a2e", borderRadius: "20px 20px 0 0", padding: "20px 24px 32px", maxHeight: "70vh", overflowY: "auto" }}>
-              <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 20px" }} />
-              <div style={{ fontSize: 18, fontWeight: 700, textAlign: "center", marginBottom: 16 }}>Select accounts</div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                <span style={{ fontSize: 13, color: "#818cf8" }}>Accounts ({accountNames.length})</span>
-                <button onClick={() => { const all = selected.length === accountNames.length ? [] : accountNames; setSelectedAccounts(all); localStorage.setItem("selected_accounts", JSON.stringify(all)); }}
-                  style={{ background: "none", border: "none", color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
-                  {selected.length === accountNames.length ? "Deselect all" : "Select all"}
-                </button>
-              </div>
-              {accountNames.map((name) => (
-                <div key={name} onClick={() => toggle(name)} style={{ display: "flex", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", border: `2px solid ${selected.includes(name) ? "#818cf8" : "rgba(255,255,255,0.15)"}`, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 12, background: selected.includes(name) ? "rgba(129,140,248,0.15)" : "transparent" }}>
-                    {selected.includes(name) && <span style={{ color: "#818cf8", fontSize: 14, fontWeight: 700 }}>{"\u2713"}</span>}
+          <BottomSheet onClose={() => setShowAccountFilter(false)} title="Filter by Account">
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              <button onClick={() => { const all = selected.length === accountNames.length ? [] : accountNames; setSelectedAccounts(all); localStorage.setItem("selected_accounts", JSON.stringify(all)); }}
+                style={{ background: "none", border: "none", color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+                {selected.length === accountNames.length ? "Deselect all" : "Select all"}
+              </button>
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 14, overflow: "hidden" }}>
+              {accountNames.map((name, i) => (
+                <div key={name} onClick={() => toggle(name)} style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < accountNames.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none", cursor: "pointer" }}>
+                  <div style={{ width: 24, height: 24, borderRadius: 6, border: `2px solid ${selected.includes(name) ? "#818cf8" : "rgba(255,255,255,0.12)"}`, display: "flex", alignItems: "center", justifyContent: "center", marginRight: 12, background: selected.includes(name) ? "rgba(99,102,241,0.15)" : "transparent" }}>
+                    {selected.includes(name) && <span style={{ color: "#818cf8", fontSize: 12, fontWeight: 700 }}>{"\u2713"}</span>}
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 500 }}>{name}</span>
                 </div>
               ))}
-              <button onClick={() => setShowAccountFilter(false)}
-                style={{ width: "100%", padding: "14px", marginTop: 16, background: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: "none", borderRadius: 12, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
-                Save
-              </button>
             </div>
-          </div>
+            {accountNames.length === 0 && (
+              <div style={{ textAlign: "center", padding: "20px", color: "#3f3f46", fontSize: 13 }}>No accounts available</div>
+            )}
+            <button onClick={() => setShowAccountFilter(false)}
+              style={{ width: "100%", padding: "14px", marginTop: 16, background: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: "none", borderRadius: 14, color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+              Apply
+            </button>
+          </BottomSheet>
         );
       })()}
 
       {/* Category drill-down modal */}
       {drillCategory && (() => {
         const cat = getCat(drillCategory);
-        const catTxns = periodTransactions.filter((t) => t.categoryId === drillCategory);
-        const catTotal = catTxns.reduce((s, t) => s + t.amount, 0);
+        const source = drillSource === "budget" ? periodTransactions : allTransactions;
+        const catTxns = source.filter((t) => t.categoryId === drillCategory);
+        const catSpend = catTxns.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+        const catIncome = catTxns.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
         const budget = getBudget(drillCategory);
+        const isOver = budget > 0 && catSpend > budget;
+
+        // Group by date
+        const groups = {};
+        catTxns.forEach((t) => {
+          if (!groups[t.date]) groups[t.date] = [];
+          groups[t.date].push(t);
+        });
+
         return (
-          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-            <div onClick={() => setDrillCategory(null)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
-            <div style={{ position: "relative", width: "100%", maxWidth: 430, background: "#1a1a2e", borderRadius: "20px 20px 0 0", padding: "20px 24px 32px", maxHeight: "80vh", overflowY: "auto" }}>
-              <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 16px" }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                <div style={{ width: 48, height: 48, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>{cat.icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 18, fontWeight: 700 }}>{cat.label}</div>
-                  <div style={{ fontSize: 14, color: "#71717a" }}>{catTxns.length} transaction{catTxns.length !== 1 ? "s" : ""}</div>
+          <BottomSheet onClose={() => setDrillCategory(null)}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{cat.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>{cat.label}</div>
+                <div style={{ fontSize: 13, color: "#71717a" }}>{catTxns.length} transaction{catTxns.length !== 1 ? "s" : ""}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                {catSpend > 0 && <div style={{ fontSize: 20, fontWeight: 700 }}>-{"\u00A3"}{fmt(catSpend)}</div>}
+                {catIncome > 0 && <div style={{ fontSize: 16, fontWeight: 600, color: "#34d399" }}>+{"\u00A3"}{fmt(catIncome)}</div>}
+              </div>
+            </div>
+
+            {/* Budget progress */}
+            {budget > 0 && (
+              <div style={{ marginBottom: 16, padding: "12px 16px", background: "rgba(255,255,255,0.03)", borderRadius: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                  <span style={{ fontSize: 12, color: isOver ? "#ef4444" : "#71717a" }}>
+                    {isOver ? `\u00A3${fmt(catSpend - budget)} over budget` : `\u00A3${fmt(budget - catSpend)} remaining`}
+                  </span>
+                  <span style={{ fontSize: 12, color: "#52525b" }}>{"\u00A3"}{budget} budget</span>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: catTotal >= 0 ? "#34d399" : "#e4e4e7" }}>{catTotal >= 0 ? "+" : "-"}{"\u00A3"}{Math.abs(catTotal).toFixed(2)}</div>
-                  {budget > 0 && <div style={{ fontSize: 12, color: Math.abs(catTotal) > budget ? "#ef4444" : "#71717a" }}>of {"\u00A3"}{budget} budget</div>}
+                <div style={{ height: 6, background: "rgba(255,255,255,0.04)", borderRadius: 3 }}>
+                  <div style={{ width: `${Math.min((catSpend / budget) * 100, 100)}%`, height: "100%", background: isOver ? "#ef4444" : cat.color, borderRadius: 3 }} />
                 </div>
               </div>
-              {budget > 0 && (
-                <div style={{ marginBottom: 16, height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3 }}>
-                  <div style={{ width: `${Math.min((Math.abs(catTotal) / budget) * 100, 100)}%`, height: "100%", background: Math.abs(catTotal) > budget ? "#ef4444" : cat.color, borderRadius: 3 }} />
-                </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {catTxns.map((tx) => (
-                  <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            )}
+
+            {/* Transactions grouped by date */}
+            {Object.entries(groups).map(([date, txns]) => (
+              <div key={date}>
+                <div style={{ fontSize: 12, color: "#52525b", fontWeight: 500, padding: "10px 0 6px" }}>{formatDateHeader(date)}</div>
+                {txns.map((tx) => (
+                  <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "11px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
-                      <div style={{ fontSize: 12, color: "#52525b" }}>{tx.fullDate || tx.date}{tx.accountName ? ` \u00B7 ${tx.accountName}` : ""}</div>
+                      <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 2 }}>{tx.accountName || ""}</div>
                     </div>
                     <div style={{ fontSize: 14, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7", flexShrink: 0 }}>
-                      {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{Math.abs(tx.amount).toFixed(2)}
+                      {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
+            ))}
+            {catTxns.length === 0 && (
+              <div style={{ textAlign: "center", padding: "30px 0", color: "#3f3f46", fontSize: 13 }}>No transactions in this category</div>
+            )}
+          </BottomSheet>
         );
       })()}
 
       {editingTx !== null && <CategoryPicker onSelect={(catId) => handleCategoryChange(editingTx, catId)} onClose={() => setEditingTx(null)} />}
-      <div style={{ textAlign: "center", padding: "30px 20px 10px", fontSize: 11, color: "#3f3f46" }}>
-        {tlTokens.length > 0 ? "Live data via TrueLayer" : "Dummy data"} {"\u00B7"} Prototype v0.6
+
+      {/* Bottom tab bar — fixed */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "rgba(9,9,15,0.95)", backdropFilter: "blur(20px)", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", padding: "8px 0 20px", zIndex: 100 }}>
+        {tabs.map((tab) => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "4px 0" }}>
+            <span style={{ fontSize: 18, opacity: activeTab === tab.id ? 1 : 0.4 }}>{tab.icon}</span>
+            <span style={{ fontSize: 10, fontWeight: activeTab === tab.id ? 600 : 400, color: activeTab === tab.id ? "#818cf8" : "#52525b" }}>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{ textAlign: "center", padding: "10px 20px 0", fontSize: 10, color: "#27272a" }}>
+        {tlTokens.length > 0 ? "Live data via TrueLayer" : "Connect your bank to start"} {"\u00B7"} v0.7
       </div>
     </div>
   );
