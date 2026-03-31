@@ -205,64 +205,191 @@ function BottomSheet({ onClose, children, title }) {
   );
 }
 
+// ── Merchant Logo System ─────────────────────────────
+// Maps merchant name keywords to their website domain for logo fetching
+const MERCHANT_LOGOS = {
+  // Food & Drink
+  "pret": "pret.co.uk", "starbucks": "starbucks.co.uk", "costa": "costa.co.uk",
+  "mcdonald": "mcdonalds.co.uk", "nando": "nandos.co.uk", "wagamama": "wagamama.com",
+  "deliveroo": "deliveroo.co.uk", "uber eats": "ubereats.com", "just eat": "just-eat.co.uk",
+  "greggs": "greggs.co.uk", "subway": "subway.com", "kfc": "kfc.co.uk",
+  "domino": "dominos.co.uk", "five guys": "fiveguys.co.uk", "leon": "leon.co",
+  "itsu": "itsu.com", "wasabi": "wasabi.uk.com", "pizza hut": "pizzahut.co.uk",
+  "pizza express": "pizzaexpress.com", "frankie": "frankieandbennys.com",
+  "marugame": "marugame-udon.com", "dishoom": "dishoom.com", "honest burger": "honestburgers.co.uk",
+  "tortilla": "tortilla.co.uk", "chipotle": "chipotle.co.uk", "shake shack": "shakeshack.com",
+  "yo sushi": "yosushi.com", "gail": "gailsbread.co.uk", "joe & the juice": "joejuice.com",
+  "caffe nero": "caffenero.com", "eat": "eat.co.uk", "pod": "podfoods.co.uk",
+  "wingstop": "wingstop.co.uk", "popeyes": "popeyes.co.uk",
+  // Groceries
+  "tesco": "tesco.com", "sainsbury": "sainsburys.co.uk", "asda": "asda.com",
+  "aldi": "aldi.co.uk", "lidl": "lidl.co.uk", "waitrose": "waitrose.com",
+  "morrisons": "morrisons.com", "co-op": "coop.co.uk", "ocado": "ocado.com",
+  "marks": "marksandspencer.com", "m&s": "marksandspencer.com", "iceland": "iceland.co.uk",
+  // Transport
+  "tfl": "tfl.gov.uk", "uber": "uber.com", "bolt": "bolt.eu",
+  "lime": "li.me", "trainline": "thetrainline.com", "shell": "shell.co.uk",
+  "bp": "bp.com", "citymapper": "citymapper.com",
+  // Shopping
+  "amazon": "amazon.co.uk", "ebay": "ebay.co.uk", "asos": "asos.com",
+  "zara": "zara.com", "h&m": "hm.com", "primark": "primark.com",
+  "nike": "nike.com", "adidas": "adidas.co.uk", "uniqlo": "uniqlo.com",
+  "john lewis": "johnlewis.com", "argos": "argos.co.uk", "currys": "currys.co.uk",
+  "ikea": "ikea.com", "apple": "apple.com", "samsung": "samsung.com",
+  "boots": "boots.com", "superdrug": "superdrug.com",
+  // Entertainment & Subs
+  "netflix": "netflix.com", "spotify": "spotify.com", "disney": "disneyplus.com",
+  "odeon": "odeon.co.uk", "cineworld": "cineworld.co.uk", "vue": "myvue.com",
+  "playstation": "playstation.com", "xbox": "xbox.com", "steam": "store.steampowered.com",
+  "youtube": "youtube.com", "twitch": "twitch.tv", "apple tv": "tv.apple.com",
+  "sky": "sky.com", "now tv": "nowtv.com", "patreon": "patreon.com",
+  "notion": "notion.so", "figma": "figma.com", "adobe": "adobe.com",
+  "microsoft": "microsoft.com", "icloud": "icloud.com", "google": "google.com",
+  "emma": "emma-app.com",
+  // Bills
+  "virgin media": "virginmedia.com", "bt ": "bt.com", "vodafone": "vodafone.co.uk",
+  "ee ": "ee.co.uk", "three": "three.co.uk", "o2": "o2.co.uk",
+  "talktalk": "talktalk.co.uk", "council": "gov.uk",
+  // Travel
+  "airbnb": "airbnb.co.uk", "booking": "booking.com", "expedia": "expedia.co.uk",
+  "ryanair": "ryanair.com", "easyjet": "easyjet.com", "british airway": "britishairways.com",
+  "skyscanner": "skyscanner.net", "trivago": "trivago.co.uk",
+  // Finance / Investment
+  "trading 212": "trading212.com", "t212": "trading212.com",
+  "interactive broker": "interactivebrokers.com", "ibkr": "interactivebrokers.com",
+  "kraken": "kraken.com", "coinbase": "coinbase.com", "binance": "binance.com",
+  "freetrade": "freetrade.io", "vanguard": "vanguardinvestor.co.uk",
+  "hargreaves": "hl.co.uk", "seedrs": "seedrs.com", "crowdcube": "crowdcube.com",
+  "republic": "republic.com", "monzo": "monzo.com", "revolut": "revolut.com",
+  "wise": "wise.com", "starling": "starlingbank.com", "chase": "chase.co.uk",
+  "hsbc": "hsbc.co.uk", "barclays": "barclays.co.uk", "natwest": "natwest.com",
+  "lloyds": "lloydsbank.com", "nationwide": "nationwide.co.uk",
+  "santander": "santander.co.uk", "halifax": "halifax.co.uk",
+  // Work
+  "anthropic": "anthropic.com", "openai": "openai.com",
+  // Health
+  "specsaver": "specsavers.co.uk", "gym": "thegym.com",
+  // Other
+  "rightmove": "rightmove.co.uk", "zoopla": "zoopla.co.uk",
+};
+
+// Cache for broken logo URLs to avoid retrying
+const brokenLogos = new Set();
+
+function getMerchantLogo(merchantName) {
+  if (!merchantName) return null;
+  const lower = merchantName.toLowerCase();
+  for (const [key, domain] of Object.entries(MERCHANT_LOGOS)) {
+    if (lower.includes(key)) {
+      const url = `https://logo.clearbit.com/${domain}?size=80`;
+      if (brokenLogos.has(url)) return null;
+      return url;
+    }
+  }
+  return null;
+}
+
+// Logo component with fallback to category icon
+function MerchantIcon({ merchant, categoryId, size = 40 }) {
+  const [imgError, setImgError] = useState(false);
+  const logoUrl = useMemo(() => getMerchantLogo(merchant), [merchant]);
+  const cat = getCat(categoryId);
+
+  if (logoUrl && !imgError) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", flexShrink: 0, background: "#1a1a2e" }}>
+        <img
+          src={logoUrl}
+          alt=""
+          width={size}
+          height={size}
+          style={{ objectFit: "cover", display: "block" }}
+          onError={() => { brokenLogos.add(logoUrl); setImgError(true); }}
+          loading="lazy"
+        />
+      </div>
+    );
+  }
+
+  // Fallback: colored circle with first letter (like real fintech apps)
+  const initial = (merchant || "?").charAt(0).toUpperCase();
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size / 2, flexShrink: 0,
+      background: `${cat.color}18`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.42, fontWeight: 700, color: cat.color,
+    }}>
+      {initial}
+    </div>
+  );
+}
+
 // ── Auto-categorization ──────────────────────────────
-const CATEGORY_RULES = [
-  { pattern: /rent|mortgage|rightmove|openrent|letting|housing/i, categoryId: "housing" },
-  { pattern: /pret|starbucks|costa|mcdonald|burger|nando|wagamama|pizza|kebab|sushi|cafe|coffee|restaurant|dining|deliveroo|uber\s*eats|just\s*eat|dine|grill|kitchen|bistro|brasserie|bar\s|pub\s|salad|greggs|subway|kfc|domino|five\s*guys|leon|itsu|wasabi|eat\b|food\s*hall|canteen/i, categoryId: "eating_out" },
-  { pattern: /tesco|sainsbury|asda|aldi|lidl|waitrose|morrisons|co-?op|ocado|marks.*spencer|m&s\s*food|grocery|supermarket|iceland/i, categoryId: "groceries" },
-  { pattern: /tfl|uber(?!\s*eat)|bolt|lime|taxi|cab|train|rail|bus|parking|petrol|fuel|shell|bp\s|esso|car\s*wash|congestion|oyster|citymapper/i, categoryId: "transport" },
-  { pattern: /amazon|ebay|asos|zara|h&m|primark|nike|adidas|uniqlo|john\s*lewis|argos|currys|ikea|apple\.com|google\s*store|samsung/i, categoryId: "shopping" },
-  { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s|now\s*tv|theatre|concert|ticket/i, categoryId: "entertainment" },
-  { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium/i, categoryId: "subscriptions" },
-  { pattern: /electric|gas\b|water|council\s*tax|internet|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin\s*media|bt\s*(group|broadband|sport|phone|mobile)|ee\s*(mobile|phone|ltd)|vodafone|three\s*(mobile|uk)|o2\s*(uk|mobile)|sky\s*(broadband|tv)|talktalk/i, categoryId: "bills" },
-  { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|eye|boots\s*optician|specsaver|gym|fitness|health/i, categoryId: "health" },
-  { pattern: /family|transfer.*viet|remittance|wise.*vn|moneygram|western\s*union/i, categoryId: "family" },
-  { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air/i, categoryId: "work_travel" },
-  { pattern: /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance/i, categoryId: "income" },
-  { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube/i, categoryId: "investment" },
-  { pattern: /transfer|pot\s|savings\s*goal|internal|between\s*accounts|moving\s*money/i, categoryId: "transfer" },
+// Bank / fintech names — payments TO these are inter-account transfers, not spending
+const BANK_NAMES = /^(wise|revolut|monzo|starling|chase|hsbc|barclays|natwest|lloyds|nationwide|santander|halifax|first\s*direct|metro\s*bank|virgin\s*money|atom\s*bank|tsb|rbs|clydesdale|yorkshire|co-?operative\s*bank|triodos|n26|bunq|tide|cashplus|pockit|loot|curve|plum|chip|moneybox|nutmeg|wealthify|pensionbee)/i;
+
+// Transaction description patterns that indicate transfers
+const TRANSFER_DESC = /transfer|faster\s*payment|standing\s*order|direct\s*debit\s*(to|from)|ft\s*-|fp\s*-|bacs|chaps|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|moving\s*money|internal|current\s*account|payment\s*to\s*(mr|ms|mrs|miss)|sent\s*from/i;
+
+const SPENDING_RULES = [
+  // Housing — very specific
+  { pattern: /rent|mortgage|rightmove|openrent|letting|housing\s*benefit/i, categoryId: "housing" },
+  // Eating out
+  { pattern: /pret|starbucks|costa|mcdonald|burger|nando|wagamama|pizza|kebab|sushi|cafe|coffee|restaurant|dining|deliveroo|uber\s*eats|just\s*eat|dine|grill|kitchen|bistro|brasserie|bar\s|pub\s|salad|greggs|subway|kfc|domino|five\s*guys|leon|itsu|wasabi|eat\b|food\s*hall|canteen|marugame|dishoom|chipotle|shake\s*shack|wingstop|popeyes|tortilla|gail|joe\s.*juice|caffe\s*nero|yo\s*sushi|honest\s*burger|pizza\s*(express|hut)|frankie|shake\s*shack|noodle|ramen|curry|thai|chinese\s*take|indian\s*take|fish\s*&?\s*chip/i, categoryId: "eating_out" },
+  // Groceries
+  { pattern: /tesco|sainsbury|asda|aldi|lidl|waitrose|morrisons|co-?op\s*(food|store)|ocado|marks.*spencer|m&s\s*food|grocery|supermarket|iceland\s*(food|store)|whole\s*foods/i, categoryId: "groceries" },
+  // Transport
+  { pattern: /tfl|uber(?!\s*eat)|bolt\s*(ride|taxi)|lime\s*(scoot|bike)|taxi|cab\s|train|rail|bus\s|parking|petrol|fuel|shell\s*(garage|station)|bp\s*(garage|station)|esso|car\s*wash|congestion|oyster|citymapper|trainline|national\s*rail|south\s*western|greater\s*anglia|avanti/i, categoryId: "transport" },
+  // Shopping
+  { pattern: /amazon|ebay|asos|zara|h&m|primark|nike|adidas|uniqlo|john\s*lewis|argos|currys|ikea|apple\.(com|store)|google\s*store|samsung|boots|superdrug|tk\s*maxx|next\s|river\s*island|new\s*look|topshop|selfridges|harrods|liberty/i, categoryId: "shopping" },
+  // Entertainment
+  { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s*(tv|go)|now\s*tv|theatre|concert|ticket|gig\s|event|bowling|laser|escape\s*room/i, categoryId: "entertainment" },
+  // Subscriptions
+  { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium|chatgpt|claude|openai|anthropic|github|dropbox|1password|lastpass|nordvpn|express\s*vpn/i, categoryId: "subscriptions" },
+  // Bills — only match specific utility/telecoms, NOT bank names
+  { pattern: /electric|gas\s*(bill|energy)|water\s*(bill|rate)|council\s*tax|internet\s*(bill|provider)|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin\s*media|bt\s*(broadband|sport|phone|mobile|group)|ee\s*(mobile|phone|ltd)|vodafone\s*(uk|bill|mobile)|three\s*(mobile|uk)|o2\s*(uk|mobile)|sky\s*(broadband|tv)|talktalk|british\s*gas|edf|eon|sse|octopus\s*energy|bulb|ovo\s*energy|scottish\s*power|thames\s*water|severn\s*trent|united\s*utilities|anglian\s*water/i, categoryId: "bills" },
+  // Health
+  { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|optician|specsaver|gym|fitness|health|puregym|david\s*lloyd|virgin\s*active|nuffield|bupa/i, categoryId: "health" },
+  // Family
+  { pattern: /family|transfer.*viet|remittance|wise.*vn|moneygram|western\s*union|world\s*remit/i, categoryId: "family" },
+  // Travel
+  { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air|skyscanner|trivago|hostel|luggage/i, categoryId: "work_travel" },
+  // Investment platforms (outgoing = investing)
+  { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube|nutmeg|wealthify|pensionbee|moneybox/i, categoryId: "investment" },
 ];
 
-// Patterns that indicate REAL income (not inter-account transfers)
-const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance|seedrs|crowdcube|republic|bonus|commission|reward/i;
-
-// Patterns that indicate inter-account transfers (money moving between your own accounts)
-// These override other rules — a payment to "Wise" or "Revolut" is a transfer, not a bill
-const TRANSFER_PATTERN = /^(wise|revolut|monzo|starling|chase|hsbc|barclays|natwest|lloyds|nationwide|santander|halifax|first\s*direct|metro\s*bank|virgin\s*money|atom\s*bank|tsb|rbs|clydesdale|yorkshire|co-?operative\s*bank|triodos|bank\s*transfer|faster\s*payment|standing\s*order|direct\s*debit.*transfer|ft\s*-|fp\s*-|bacs|chaps|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|internal|moving\s*money|current\s*account)/i;
-
-// Additional transfer patterns that match anywhere in text (not just start)
-const TRANSFER_ANYWHERE = /transfer\s*(to|from)|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|between\s*accounts|moving\s*money|internal\s*transfer|own\s*account/i;
+// Income patterns
+const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance|seedrs|crowdcube|republic|bonus|commission|reward|compensation|settlement/i;
 
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
-  const merchant = (merchantName || "").toLowerCase();
+  const merchant = (merchantName || "").toLowerCase().trim();
 
   // ── POSITIVE amounts (money IN) ──
   if (amount > 0) {
     if (INCOME_PATTERN.test(text)) return "income";
-    return "transfer"; // default: inter-account move
+    return "transfer"; // default: most credits are inter-account moves
   }
 
   // ── NEGATIVE amounts (money OUT) ──
+  // Priority order: Transfer detection → Spending rules → TL fallback
 
-  // 1. Check if TrueLayer explicitly says TRANSFER — trust it
+  // 1. TrueLayer explicitly says TRANSFER → trust it
   if (tlCategory === "TRANSFER") return "transfer";
 
-  // 2. Check transfer patterns BEFORE other rules
-  //    Payments to bank names (Wise, Revolut, HSBC, etc.) are transfers, not bills
-  if (TRANSFER_PATTERN.test(merchant) || TRANSFER_PATTERN.test(text)) return "transfer";
-  if (TRANSFER_ANYWHERE.test(text)) return "transfer";
+  // 2. Merchant name is a bank/fintech → transfer (not bills!)
+  if (BANK_NAMES.test(merchant)) return "transfer";
 
-  // 3. Check spending category rules
-  for (const rule of CATEGORY_RULES) {
-    if (rule.pattern.test(text)) {
-      // Skip the transfer rule here — already checked above
-      if (rule.categoryId === "transfer") continue;
-      return rule.categoryId;
-    }
+  // 3. Description indicates transfer
+  if (TRANSFER_DESC.test(text)) return "transfer";
+
+  // 4. Spending category rules
+  for (const rule of SPENDING_RULES) {
+    if (rule.pattern.test(text)) return rule.categoryId;
   }
 
-  // 4. TrueLayer fallbacks for uncategorized spending
+  // 5. TrueLayer category fallback
   if (tlCategory === "BILL_PAYMENT") return "bills";
   if (tlCategory === "PURCHASE") return "shopping";
   return "general";
@@ -874,9 +1001,7 @@ export default function Dashboard() {
                     const cat = getCat(tx.categoryId);
                     return (
                       <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < group.txns.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-                          {cat.icon}
-                        </div>
+                        <MerchantIcon merchant={tx.merchant} categoryId={tx.categoryId} size={40} />
                         <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
                           <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -988,7 +1113,7 @@ export default function Dashboard() {
               const cat = getCat(r.categoryId);
               return (
                 <div key={r.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < recurring.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                  <div style={{ width: 38, height: 38, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{cat.icon}</div>
+                  <MerchantIcon merchant={r.merchant} categoryId={r.categoryId} size={38} />
                   <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
                     {editingRecurring === "all" ? (
                       <input defaultValue={r.merchant} onBlur={(e) => updateRecurringItem(r.id, "merchant", e.target.value)}
@@ -1322,9 +1447,7 @@ export default function Dashboard() {
                 return (
                   <div key={name} style={{ padding: "14px 16px", borderBottom: i < sortedMerchants.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: cat.color, flexShrink: 0 }}>
-                        {name.charAt(0).toUpperCase()}
-                      </div>
+                      <MerchantIcon merchant={name} categoryId={data.categoryId} size={40} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
@@ -1354,7 +1477,7 @@ export default function Dashboard() {
             <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
               {sortedIncome.map(([name, data], i) => (
                 <div key={name} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < sortedIncome.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(52,211,153,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{"\u{1F4B0}"}</div>
+                  <MerchantIcon merchant={name} categoryId="income" size={40} />
                   <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 500 }}>{name}</div>
                     <div style={{ fontSize: 11, color: "#52525b" }}>{data.count} payment{data.count !== 1 ? "s" : ""}</div>
@@ -1504,7 +1627,8 @@ export default function Dashboard() {
               <div key={date}>
                 <div style={{ fontSize: 12, color: "#52525b", fontWeight: 500, padding: "10px 0 6px" }}>{formatDateHeader(date)}</div>
                 {txns.map((tx) => (
-                  <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "11px 0", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                  <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "11px 0", borderBottom: "1px solid rgba(255,255,255,0.03)", gap: 10 }}>
+                    <MerchantIcon merchant={tx.merchant} categoryId={tx.categoryId} size={34} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
                       <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 2 }}>{tx.accountName || ""}</div>
