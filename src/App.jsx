@@ -214,41 +214,55 @@ const CATEGORY_RULES = [
   { pattern: /amazon|ebay|asos|zara|h&m|primark|nike|adidas|uniqlo|john\s*lewis|argos|currys|ikea|apple\.com|google\s*store|samsung/i, categoryId: "shopping" },
   { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s|now\s*tv|theatre|concert|ticket/i, categoryId: "entertainment" },
   { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium/i, categoryId: "subscriptions" },
-  { pattern: /electric|gas\b|water|council\s*tax|internet|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin|bt\s|ee\s|vodafone|three\s|o2\s/i, categoryId: "bills" },
+  { pattern: /electric|gas\b|water|council\s*tax|internet|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin\s*media|bt\s*(group|broadband|sport|phone|mobile)|ee\s*(mobile|phone|ltd)|vodafone|three\s*(mobile|uk)|o2\s*(uk|mobile)|sky\s*(broadband|tv)|talktalk/i, categoryId: "bills" },
   { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|eye|boots\s*optician|specsaver|gym|fitness|health/i, categoryId: "health" },
   { pattern: /family|transfer.*viet|remittance|wise.*vn|moneygram|western\s*union/i, categoryId: "family" },
   { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air/i, categoryId: "work_travel" },
   { pattern: /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance/i, categoryId: "income" },
   { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube/i, categoryId: "investment" },
-  { pattern: /transfer|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|internal|between\s*accounts|moving\s*money|hsbc\s*save|current\s*account|savings\s*account|wise\b.*gbp|wise\b.*eur|wise\b.*usd|chase\b.*account|standing\s*order/i, categoryId: "transfer" },
+  { pattern: /transfer|pot\s|savings\s*goal|internal|between\s*accounts|moving\s*money/i, categoryId: "transfer" },
 ];
 
 // Patterns that indicate REAL income (not inter-account transfers)
 const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance|seedrs|crowdcube|republic|bonus|commission|reward/i;
 
+// Patterns that indicate inter-account transfers (money moving between your own accounts)
+// These override other rules — a payment to "Wise" or "Revolut" is a transfer, not a bill
+const TRANSFER_PATTERN = /^(wise|revolut|monzo|starling|chase|hsbc|barclays|natwest|lloyds|nationwide|santander|halifax|first\s*direct|metro\s*bank|virgin\s*money|atom\s*bank|tsb|rbs|clydesdale|yorkshire|co-?operative\s*bank|triodos|bank\s*transfer|faster\s*payment|standing\s*order|direct\s*debit.*transfer|ft\s*-|fp\s*-|bacs|chaps|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|internal|moving\s*money|current\s*account)/i;
+
+// Additional transfer patterns that match anywhere in text (not just start)
+const TRANSFER_ANYWHERE = /transfer\s*(to|from)|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|between\s*accounts|moving\s*money|internal\s*transfer|own\s*account/i;
+
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
+  const merchant = (merchantName || "").toLowerCase();
 
   // ── POSITIVE amounts (money IN) ──
-  // Default: treat as "transfer" (most credits are inter-account moves)
-  // Only mark as "income" if it matches known income sources
   if (amount > 0) {
     if (INCOME_PATTERN.test(text)) return "income";
-    // Check standard income rule from CATEGORY_RULES
-    for (const rule of CATEGORY_RULES) {
-      if (rule.pattern.test(text) && rule.categoryId === "income") return "income";
-    }
-    // Everything else positive = transfer (user can override manually)
-    return "transfer";
+    return "transfer"; // default: inter-account move
   }
 
-  // ── NEGATIVE amounts (money OUT) → categorize normally ──
+  // ── NEGATIVE amounts (money OUT) ──
+
+  // 1. Check if TrueLayer explicitly says TRANSFER — trust it
+  if (tlCategory === "TRANSFER") return "transfer";
+
+  // 2. Check transfer patterns BEFORE other rules
+  //    Payments to bank names (Wise, Revolut, HSBC, etc.) are transfers, not bills
+  if (TRANSFER_PATTERN.test(merchant) || TRANSFER_PATTERN.test(text)) return "transfer";
+  if (TRANSFER_ANYWHERE.test(text)) return "transfer";
+
+  // 3. Check spending category rules
   for (const rule of CATEGORY_RULES) {
     if (rule.pattern.test(text)) {
+      // Skip the transfer rule here — already checked above
+      if (rule.categoryId === "transfer") continue;
       return rule.categoryId;
     }
   }
-  if (tlCategory === "TRANSFER") return "transfer";
+
+  // 4. TrueLayer fallbacks for uncategorized spending
   if (tlCategory === "BILL_PAYMENT") return "bills";
   if (tlCategory === "PURCHASE") return "shopping";
   return "general";
@@ -259,10 +273,9 @@ function mapTx(tx, accountName) {
   const amount = tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
   const ts = new Date(tx.timestamp);
   const catId = categorize(tx.merchant_name, tx.description, tx.transaction_category, amount);
-  // Debug: log positive transactions to verify income categorization
-  if (amount > 0) {
-    console.log(`[INCOME] ${tx.merchant_name || tx.description} | £${amount} | TL_type=${tx.transaction_type} | TL_cat=${tx.transaction_category} | -> ${catId}`);
-  }
+  // Debug: log all transactions to verify categorization
+  const label = amount > 0 ? "IN" : "OUT";
+  console.log(`[${label}] ${(tx.merchant_name || tx.description || "?").substring(0, 30)} | £${Math.abs(amount).toFixed(2)} | TL_cat=${tx.transaction_category} | -> ${catId}`);
   return {
     id: `tl_${tx.transaction_id}`,
     date: ts.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
