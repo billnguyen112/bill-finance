@@ -39,6 +39,7 @@ const CATEGORIES = [
 
 // Categories excluded from spending analytics and budgets
 const EXCLUDED_FROM_SPENDING = ["income", "work_travel", "transfer", "investment"];
+const EXCLUDED_FROM_INCOME = ["transfer", "investment"]; // don't exclude "income" category from income calcs
 
 const DEFAULT_RECURRING = [
   { id: "r1", merchant: "Rightmove Rent", amount: 1050, categoryId: "housing", frequency: "Monthly", nextDate: "27 Apr" },
@@ -234,27 +235,27 @@ const CATEGORY_RULES = [
   { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air/i, categoryId: "work_travel" },
   // Income
   { pattern: /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance/i, categoryId: "income" },
-  // Transfers (net-zero moves between own accounts)
-  { pattern: /transfer|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|internal|between\s*accounts|moving\s*money/i, categoryId: "transfer" },
-  // Investments
+  // Investments (BEFORE transfers — seedrs, T212, IBKR deposits are investments not transfers)
   { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube/i, categoryId: "investment" },
+  // Transfers (net-zero moves between own accounts)
+  { pattern: /transfer|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|internal|between\s*accounts|moving\s*money|hsbc\s*save|current\s*account|savings\s*account|wise\b.*gbp|wise\b.*eur|wise\b.*usd|chase\b.*account|standing\s*order/i, categoryId: "transfer" },
 ];
 
 function categorize(merchantName, description, tlCategory, amount) {
-  // Income detection
-  if (amount > 0) return "income";
-
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
 
-  // Try keyword matching
+  // Check keyword rules FIRST (works for both positive and negative amounts)
   for (const rule of CATEGORY_RULES) {
     if (rule.pattern.test(text)) return rule.categoryId;
   }
 
-  // Fallback to TrueLayer category
+  // TrueLayer category-based fallback
   if (tlCategory === "TRANSFER") return "transfer";
-  if (tlCategory === "PURCHASE") return "shopping";
   if (tlCategory === "BILL_PAYMENT") return "bills";
+  if (tlCategory === "PURCHASE") return "shopping";
+
+  // If positive amount and nothing matched, it's income
+  if (amount > 0) return "income";
 
   return "general";
 }
@@ -399,7 +400,7 @@ export default function Dashboard() {
           try {
             const txRes = await fetchTransactions(token, acc.account_id);
             (txRes.results || []).forEach((tx) => allTxns.push(mapTx(tx, acc.display_name)));
-          } catch { /* skip */ }
+          } catch (e) { console.warn("Failed to fetch txns for", acc.display_name, e.message); }
         }
 
         // Fetch credit cards
@@ -472,34 +473,61 @@ export default function Dashboard() {
   const totalInvested = mergedAccounts.filter((a) => ["Brokerage", "ISA", "Private Equity", "Crypto"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
   const totalCash = mergedAccounts.filter((a) => a.type === "Bank").reduce((s, a) => s + a.balance, 0);
 
-  const income = useMemo(() => allTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [allTransactions]);
-  const spending = useMemo(() => allTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [allTransactions]);
+  const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
+  const spending = useMemo(() => periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [periodTransactions]);
   const netFlow = income - spending;
   const savingsRate = income > 0 ? Math.round(((income - spending) / income) * 100) : 0;
 
   MONTHLY_SAVINGS[MONTHLY_SAVINGS.length - 1].rate = savingsRate;
 
+  // Parse date helper for filtering
+  const parseTxDate = (d) => {
+    const parts = d.split(" ");
+    const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+    const now = new Date();
+    return new Date(now.getFullYear(), months[parts[1]] ?? 0, parseInt(parts[0]) || 1);
+  };
+
+  // Budget period: 27th of last month to 27th of this month
+  const budgetCutoff = useMemo(() => {
+    const now = new Date();
+    const day = now.getDate();
+    if (day >= 27) {
+      return new Date(now.getFullYear(), now.getMonth(), 27);
+    } else {
+      return new Date(now.getFullYear(), now.getMonth() - 1, 27);
+    }
+  }, []);
+
+  // Filter transactions to budget period for budget calculations
+  const periodTransactions = useMemo(() => {
+    return allTransactions.filter((t) => parseTxDate(t.date) >= budgetCutoff);
+  }, [allTransactions, budgetCutoff]);
+
   const categorySpending = useMemo(() => {
     const map = {};
-    allTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).forEach((t) => {
+    periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).forEach((t) => {
       if (!map[t.categoryId]) map[t.categoryId] = { total: 0, count: 0 };
       map[t.categoryId].total += Math.abs(t.amount);
       map[t.categoryId].count += 1;
     });
     return map;
-  }, [allTransactions]);
+  }, [periodTransactions]);
 
   const getBudget = (catId) => budgetOverrides[catId] ?? CATEGORIES.find((c) => c.id === catId)?.budget ?? 0;
   const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
-  const discretionarySpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
+  const totalSpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
-  const committedSpend = recurringTotal;
-  const variableSpend = discretionarySpend - Math.min(committedSpend, discretionarySpend);
+  // Committed = recurring items (rent, subs, bills). Variable = everything else actually spent.
+  const committedCatIds = ["housing", "bills", "subscriptions", "family"];
+  const committedSpend = budgetedCats.filter((c) => committedCatIds.includes(c.id)).reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
+  const variableSpend = totalSpend - committedSpend;
+  const discretionarySpend = totalSpend; // alias for backwards compat
   const daysInPeriod = 31;
   const dayOfPeriod = new Date().getDate();
   const daysLeft = Math.max(daysInPeriod - dayOfPeriod, 1);
-  const dailyAllowance = Math.max((totalBudget - discretionarySpend) / daysLeft, 0);
+  const dailyAllowance = Math.max((totalBudget - totalSpend) / daysLeft, 0);
 
   const saveRecurring = (items) => {
     setRecurring(items);
@@ -789,7 +817,7 @@ export default function Dashboard() {
       {activeTab === "transactions" && (() => {
         const filtered = allTransactions.filter((t) => {
           if (txSearch && !t.merchant.toLowerCase().includes(txSearch.toLowerCase())) return false;
-          if (selectedAccounts && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
+          if (selectedAccounts && selectedAccounts.length > 0 && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
           return true;
         });
         // Group by date
@@ -871,16 +899,16 @@ export default function Dashboard() {
 
           {/* Donut + summary */}
           <div style={{ ...card, padding: 24, marginBottom: 16, textAlign: "center" }}>
-            <DonutChart spent={discretionarySpend} committed={committedSpend} total={totalBudget} size={200} />
+            <DonutChart spent={variableSpend} committed={committedSpend} total={totalBudget} size={200} />
             <div style={{ marginTop: 20 }}>
-              {discretionarySpend + committedSpend > totalBudget ? (
+              {totalSpend > totalBudget ? (
                 <>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#ef4444" }}>{"\u00A3"}{((discretionarySpend + committedSpend) - totalBudget).toFixed(2)}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#ef4444" }}>{"\u00A3"}{(totalSpend - totalBudget).toFixed(2)}</div>
                   <div style={{ fontSize: 12, color: "#71717a" }}>over your budget of {"\u00A3"}{totalBudget.toFixed(2)}</div>
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#34d399" }}>{"\u00A3"}{(totalBudget - discretionarySpend - committedSpend).toFixed(2)}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#34d399" }}>{"\u00A3"}{(totalBudget - totalSpend).toFixed(2)}</div>
                   <div style={{ fontSize: 12, color: "#71717a" }}>left of {"\u00A3"}{totalBudget.toFixed(2)} budget</div>
                 </>
               )}
@@ -888,7 +916,7 @@ export default function Dashboard() {
             <div style={{ display: "flex", justifyContent: "center", gap: 30, marginTop: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#818cf8" }} />
-                <div style={{ textAlign: "left" }}><div style={{ fontSize: 13, fontWeight: 600 }}>Spending</div><div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{discretionarySpend.toFixed(2)}</div></div>
+                <div style={{ textAlign: "left" }}><div style={{ fontSize: 13, fontWeight: 600 }}>Spending</div><div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{variableSpend.toFixed(2)}</div></div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#c084fc" }} />
@@ -1033,11 +1061,11 @@ export default function Dashboard() {
         };
         const filteredTxns = allTransactions.filter((t) => {
           const d = parseDate(t.date);
-          if (selectedAccounts && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
+          if (selectedAccounts && selectedAccounts.length > 0 && t.accountName && !selectedAccounts.includes(t.accountName)) return false;
           return d >= cutoff && d <= cutoffEnd;
         });
         const spendTxns = filteredTxns.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
-        const incomeTxns = filteredTxns.filter((t) => t.amount > 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
+        const incomeTxns = filteredTxns.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId));
         const fIncome = incomeTxns.reduce((s, t) => s + t.amount, 0);
         const fSpending = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
         const fNet = fIncome - fSpending;
