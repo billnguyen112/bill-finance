@@ -206,72 +206,168 @@ function BottomSheet({ onClose, children, title }) {
 }
 
 // ── Merchant Logo System ─────────────────────────────
-// Maps merchant name keywords to their website domain for logo fetching
-const MERCHANT_LOGOS = {
+// Uses regex patterns (not substring) to avoid false positives like "netflix" matching "tfl"
+const MERCHANT_LOGO_RULES = [
   // Food & Drink
-  "pret": "pret.co.uk", "starbucks": "starbucks.co.uk", "costa": "costa.co.uk",
-  "mcdonald": "mcdonalds.co.uk", "nando": "nandos.co.uk", "wagamama": "wagamama.com",
-  "deliveroo": "deliveroo.co.uk", "uber eats": "ubereats.com", "just eat": "just-eat.co.uk",
-  "greggs": "greggs.co.uk", "subway": "subway.com", "kfc": "kfc.co.uk",
-  "domino": "dominos.co.uk", "five guys": "fiveguys.co.uk", "leon": "leon.co",
-  "itsu": "itsu.com", "wasabi": "wasabi.uk.com", "pizza hut": "pizzahut.co.uk",
-  "pizza express": "pizzaexpress.com", "frankie": "frankieandbennys.com",
-  "marugame": "marugame-udon.com", "dishoom": "dishoom.com", "honest burger": "honestburgers.co.uk",
-  "tortilla": "tortilla.co.uk", "chipotle": "chipotle.co.uk", "shake shack": "shakeshack.com",
-  "yo sushi": "yosushi.com", "gail": "gailsbread.co.uk", "joe & the juice": "joejuice.com",
-  "caffe nero": "caffenero.com", "eat": "eat.co.uk", "pod": "podfoods.co.uk",
-  "wingstop": "wingstop.co.uk", "popeyes": "popeyes.co.uk",
+  { p: /\bpret\b/i, d: "pret.co.uk" },
+  { p: /\bstarbucks\b/i, d: "starbucks.co.uk" },
+  { p: /\bcosta\s*(coffee)?\b/i, d: "costa.co.uk" },
+  { p: /\bmcdonald/i, d: "mcdonalds.co.uk" },
+  { p: /\bnando/i, d: "nandos.co.uk" },
+  { p: /\bwagamama/i, d: "wagamama.com" },
+  { p: /\bdeliveroo/i, d: "deliveroo.co.uk" },
+  { p: /\buber\s*eats/i, d: "ubereats.com" },
+  { p: /\bjust\s*eat/i, d: "just-eat.co.uk" },
+  { p: /\bgreggs/i, d: "greggs.co.uk" },
+  { p: /\bsubway\b/i, d: "subway.com" },
+  { p: /\bkfc\b/i, d: "kfc.co.uk" },
+  { p: /\bdomino/i, d: "dominos.co.uk" },
+  { p: /\bfive\s*guys/i, d: "fiveguys.co.uk" },
+  { p: /\bleon\b/i, d: "leon.co" },
+  { p: /\bitsu\b/i, d: "itsu.com" },
+  { p: /\bwasabi\b/i, d: "wasabi.uk.com" },
+  { p: /\bpizza\s*hut/i, d: "pizzahut.co.uk" },
+  { p: /\bpizza\s*express/i, d: "pizzaexpress.com" },
+  { p: /\bmarugame/i, d: "marugame-udon.com" },
+  { p: /\bdishoom/i, d: "dishoom.com" },
+  { p: /\bhonest\s*(burger|group)/i, d: "honestburgers.co.uk" },
+  { p: /\btortilla\b/i, d: "tortilla.co.uk" },
+  { p: /\bchipotle/i, d: "chipotle.co.uk" },
+  { p: /\bshake\s*shack/i, d: "shakeshack.com" },
+  { p: /\byo\s*sushi/i, d: "yosushi.com" },
+  { p: /\bgail/i, d: "gailsbread.co.uk" },
+  { p: /\bjoe\s.*juice/i, d: "joejuice.com" },
+  { p: /\bcaffe\s*nero/i, d: "caffenero.com" },
+  { p: /\bwingstop/i, d: "wingstop.co.uk" },
+  { p: /\bpopeyes/i, d: "popeyes.co.uk" },
+  { p: /\bnoodle|ramen/i, d: "wagamama.com" },
+  { p: /\bfrankie/i, d: "frankieandbennys.com" },
   // Groceries
-  "tesco": "tesco.com", "sainsbury": "sainsburys.co.uk", "asda": "asda.com",
-  "aldi": "aldi.co.uk", "lidl": "lidl.co.uk", "waitrose": "waitrose.com",
-  "morrisons": "morrisons.com", "co-op": "coop.co.uk", "ocado": "ocado.com",
-  "marks": "marksandspencer.com", "m&s": "marksandspencer.com", "iceland": "iceland.co.uk",
+  { p: /\btesco/i, d: "tesco.com" },
+  { p: /\bsainsbury/i, d: "sainsburys.co.uk" },
+  { p: /\basda\b/i, d: "asda.com" },
+  { p: /\baldi\b/i, d: "aldi.co.uk" },
+  { p: /\blidl\b/i, d: "lidl.co.uk" },
+  { p: /\bwaitrose/i, d: "waitrose.com" },
+  { p: /\bmorrisons/i, d: "morrisons.com" },
+  { p: /\bco-?op\b/i, d: "coop.co.uk" },
+  { p: /\bocado/i, d: "ocado.com" },
+  { p: /\bmarks.*spencer|m&s\b/i, d: "marksandspencer.com" },
+  { p: /\biceland\b/i, d: "iceland.co.uk" },
+  { p: /\bwhole\s*foods/i, d: "wholefoods.com" },
   // Transport
-  "tfl": "tfl.gov.uk", "uber": "uber.com", "bolt": "bolt.eu",
-  "lime": "li.me", "trainline": "thetrainline.com", "shell": "shell.co.uk",
-  "bp": "bp.com", "citymapper": "citymapper.com",
+  { p: /\btfl\b/i, d: "tfl.gov.uk" },
+  { p: /\buber\b(?!\s*eat)/i, d: "uber.com" },
+  { p: /\bbolt\b/i, d: "bolt.eu" },
+  { p: /\blime\b/i, d: "li.me" },
+  { p: /\btrainline/i, d: "thetrainline.com" },
+  { p: /\bshell\b/i, d: "shell.co.uk" },
+  { p: /\bbp\b/i, d: "bp.com" },
+  { p: /\bcitymapper/i, d: "citymapper.com" },
   // Shopping
-  "amazon": "amazon.co.uk", "ebay": "ebay.co.uk", "asos": "asos.com",
-  "zara": "zara.com", "h&m": "hm.com", "primark": "primark.com",
-  "nike": "nike.com", "adidas": "adidas.co.uk", "uniqlo": "uniqlo.com",
-  "john lewis": "johnlewis.com", "argos": "argos.co.uk", "currys": "currys.co.uk",
-  "ikea": "ikea.com", "apple": "apple.com", "samsung": "samsung.com",
-  "boots": "boots.com", "superdrug": "superdrug.com",
-  // Entertainment & Subs
-  "netflix": "netflix.com", "spotify": "spotify.com", "disney": "disneyplus.com",
-  "odeon": "odeon.co.uk", "cineworld": "cineworld.co.uk", "vue": "myvue.com",
-  "playstation": "playstation.com", "xbox": "xbox.com", "steam": "store.steampowered.com",
-  "youtube": "youtube.com", "twitch": "twitch.tv", "apple tv": "tv.apple.com",
-  "sky": "sky.com", "now tv": "nowtv.com", "patreon": "patreon.com",
-  "notion": "notion.so", "figma": "figma.com", "adobe": "adobe.com",
-  "microsoft": "microsoft.com", "icloud": "icloud.com", "google": "google.com",
-  "emma": "emma-app.com",
-  // Bills
-  "virgin media": "virginmedia.com", "bt ": "bt.com", "vodafone": "vodafone.co.uk",
-  "ee ": "ee.co.uk", "three": "three.co.uk", "o2": "o2.co.uk",
-  "talktalk": "talktalk.co.uk", "council": "gov.uk",
+  { p: /\bamazon/i, d: "amazon.co.uk" },
+  { p: /\bebay\b/i, d: "ebay.co.uk" },
+  { p: /\basos\b/i, d: "asos.com" },
+  { p: /\bzara\b/i, d: "zara.com" },
+  { p: /\bh&m\b|h\s*&\s*m/i, d: "hm.com" },
+  { p: /\bprimark/i, d: "primark.com" },
+  { p: /\bnike\b/i, d: "nike.com" },
+  { p: /\badidas/i, d: "adidas.co.uk" },
+  { p: /\buniqlo/i, d: "uniqlo.com" },
+  { p: /\bjohn\s*lewis/i, d: "johnlewis.com" },
+  { p: /\bargos\b/i, d: "argos.co.uk" },
+  { p: /\bcurrys/i, d: "currys.co.uk" },
+  { p: /\bikea\b/i, d: "ikea.com" },
+  { p: /\bapple\b/i, d: "apple.com" },
+  { p: /\bsamsung/i, d: "samsung.com" },
+  { p: /\bboots\b/i, d: "boots.com" },
+  { p: /\bsuperdrug/i, d: "superdrug.com" },
+  { p: /\btk\s*maxx/i, d: "tkmaxx.com" },
+  { p: /\bnext\b/i, d: "next.co.uk" },
+  { p: /\bselfridges/i, d: "selfridges.com" },
+  { p: /\bharrods/i, d: "harrods.com" },
+  // Entertainment & Subscriptions
+  { p: /\bnetflix/i, d: "netflix.com" },
+  { p: /\bspotify/i, d: "spotify.com" },
+  { p: /\bdisney/i, d: "disneyplus.com" },
+  { p: /\bodeon/i, d: "odeon.co.uk" },
+  { p: /\bcineworld/i, d: "cineworld.co.uk" },
+  { p: /\bvue\b/i, d: "myvue.com" },
+  { p: /\bplaystation/i, d: "playstation.com" },
+  { p: /\bxbox\b/i, d: "xbox.com" },
+  { p: /\bsteam\b/i, d: "store.steampowered.com" },
+  { p: /\byoutube/i, d: "youtube.com" },
+  { p: /\btwitch/i, d: "twitch.tv" },
+  { p: /\bpatreon/i, d: "patreon.com" },
+  { p: /\bnotion\b/i, d: "notion.so" },
+  { p: /\bfigma\b/i, d: "figma.com" },
+  { p: /\badobe\b/i, d: "adobe.com" },
+  { p: /\bmicrosoft/i, d: "microsoft.com" },
+  { p: /\bicloud/i, d: "icloud.com" },
+  { p: /\bgoogle\b/i, d: "google.com" },
+  { p: /\bemma\b/i, d: "emma-app.com" },
+  { p: /\bchatgpt/i, d: "openai.com" },
+  { p: /\bgithub/i, d: "github.com" },
+  { p: /\bdropbox/i, d: "dropbox.com" },
+  { p: /\b1password/i, d: "1password.com" },
+  { p: /\bnordvpn/i, d: "nordvpn.com" },
+  { p: /\bsky\b/i, d: "sky.com" },
+  // Bills / Telecoms
+  { p: /\bvirgin\s*media/i, d: "virginmedia.com" },
+  { p: /\bbt\s*(broadband|sport|group|phone|mobile)/i, d: "bt.com" },
+  { p: /\bvodafone/i, d: "vodafone.co.uk" },
+  { p: /\bee\s*(mobile|phone|ltd)/i, d: "ee.co.uk" },
+  { p: /\bthree\s*(mobile|uk)/i, d: "three.co.uk" },
+  { p: /\bo2\s*(uk|mobile)/i, d: "o2.co.uk" },
+  { p: /\btalktalk/i, d: "talktalk.co.uk" },
+  { p: /\bbritish\s*gas/i, d: "britishgas.co.uk" },
+  { p: /\boctopus\s*energy/i, d: "octopus.energy" },
+  { p: /\bovo\s*energy/i, d: "ovoenergy.com" },
   // Travel
-  "airbnb": "airbnb.co.uk", "booking": "booking.com", "expedia": "expedia.co.uk",
-  "ryanair": "ryanair.com", "easyjet": "easyjet.com", "british airway": "britishairways.com",
-  "skyscanner": "skyscanner.net", "trivago": "trivago.co.uk",
-  // Finance / Investment
-  "trading 212": "trading212.com", "t212": "trading212.com",
-  "interactive broker": "interactivebrokers.com", "ibkr": "interactivebrokers.com",
-  "kraken": "kraken.com", "coinbase": "coinbase.com", "binance": "binance.com",
-  "freetrade": "freetrade.io", "vanguard": "vanguardinvestor.co.uk",
-  "hargreaves": "hl.co.uk", "seedrs": "seedrs.com", "crowdcube": "crowdcube.com",
-  "republic": "republic.com", "monzo": "monzo.com", "revolut": "revolut.com",
-  "wise": "wise.com", "starling": "starlingbank.com", "chase": "chase.co.uk",
-  "hsbc": "hsbc.co.uk", "barclays": "barclays.co.uk", "natwest": "natwest.com",
-  "lloyds": "lloydsbank.com", "nationwide": "nationwide.co.uk",
-  "santander": "santander.co.uk", "halifax": "halifax.co.uk",
-  // Work
-  "anthropic": "anthropic.com", "openai": "openai.com",
+  { p: /\bairbnb/i, d: "airbnb.co.uk" },
+  { p: /\bbooking\b/i, d: "booking.com" },
+  { p: /\bexpedia/i, d: "expedia.co.uk" },
+  { p: /\bryanair/i, d: "ryanair.com" },
+  { p: /\beasyjet/i, d: "easyjet.com" },
+  { p: /\bbritish\s*air/i, d: "britishairways.com" },
+  { p: /\bskyscanner/i, d: "skyscanner.net" },
+  // Finance / Banks
+  { p: /\btrading\s*212/i, d: "trading212.com" },
+  { p: /\binteractive\s*broker/i, d: "interactivebrokers.com" },
+  { p: /\bibkr\b/i, d: "interactivebrokers.com" },
+  { p: /\bkraken\b/i, d: "kraken.com" },
+  { p: /\bcoinbase/i, d: "coinbase.com" },
+  { p: /\bbinance/i, d: "binance.com" },
+  { p: /\bfreetrade/i, d: "freetrade.io" },
+  { p: /\bvanguard/i, d: "vanguardinvestor.co.uk" },
+  { p: /\bhargreaves/i, d: "hl.co.uk" },
+  { p: /\bseedrs/i, d: "seedrs.com" },
+  { p: /\bcrowdcube/i, d: "crowdcube.com" },
+  { p: /\bspendesk/i, d: "spendesk.com" },
+  { p: /\bmonzo\b/i, d: "monzo.com" },
+  { p: /\brevolut/i, d: "revolut.com" },
+  { p: /\bwise\b/i, d: "wise.com" },
+  { p: /\bstarling/i, d: "starlingbank.com" },
+  { p: /\bchase\b/i, d: "chase.co.uk" },
+  { p: /\bhsbc\b/i, d: "hsbc.co.uk" },
+  { p: /\bbarclays/i, d: "barclays.co.uk" },
+  { p: /\bnatwest/i, d: "natwest.com" },
+  { p: /\blloyds/i, d: "lloydsbank.com" },
+  { p: /\bnationwide/i, d: "nationwide.co.uk" },
+  { p: /\bsantander/i, d: "santander.co.uk" },
+  { p: /\bhalifax/i, d: "halifax.co.uk" },
+  // Work / Tech
+  { p: /\banthropic|claude\.ai/i, d: "anthropic.com" },
+  { p: /\bopenai\b/i, d: "openai.com" },
   // Health
-  "specsaver": "specsavers.co.uk", "gym": "thegym.com",
+  { p: /\bspecsaver/i, d: "specsavers.co.uk" },
+  { p: /\bpuregym/i, d: "puregym.com" },
+  { p: /\bbupa\b/i, d: "bupa.co.uk" },
   // Other
-  "rightmove": "rightmove.co.uk", "zoopla": "zoopla.co.uk",
-};
+  { p: /\brightmove/i, d: "rightmove.co.uk" },
+  { p: /\bzoopla/i, d: "zoopla.co.uk" },
+  { p: /\bhonest\b/i, d: "honestburgers.co.uk" },
+];
 
 // Cache for broken logo URLs to avoid retrying
 const brokenLogos = new Set();
@@ -299,25 +395,31 @@ function cleanMerchantName(raw) {
 
 function getMerchantLogo(merchantName, rawMerchant) {
   if (!merchantName && !rawMerchant) return null;
-  // Try matching against both cleaned name and raw name
-  const texts = [merchantName, rawMerchant].filter(Boolean).map(t => t.toLowerCase());
+  const combinedText = `${merchantName || ""} ${rawMerchant || ""}`;
 
-  for (const text of texts) {
-    for (const [key, domain] of Object.entries(MERCHANT_LOGOS)) {
-      if (text.includes(key)) {
-        const url = `https://icon.horse/icon/${domain}?size=80`;
-        if (brokenLogos.has(url)) return null;
-        return url;
-      }
+  // 1. Try regex rules against combined text
+  for (const rule of MERCHANT_LOGO_RULES) {
+    if (rule.p.test(combinedText)) {
+      const url = `https://icon.horse/icon/${rule.d}`;
+      if (!brokenLogos.has(url)) return url;
     }
   }
 
-  // Try to extract domain from raw text (e.g., "APPLE.COM/BILL" → apple.com)
+  // 2. Try to extract domain from raw text (e.g., "APPLE.COM/BILL" → apple.com)
   const raw = (rawMerchant || merchantName || "").toLowerCase();
   const domainMatch = raw.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
   if (domainMatch) {
     const url = `https://icon.horse/icon/${domainMatch[1]}`;
     if (!brokenLogos.has(url)) return url;
+  }
+
+  // 3. Try guessing domain from first word of cleaned merchant name
+  if (merchantName) {
+    const firstWord = merchantName.replace(/[^a-zA-Z\s]/g, "").trim().split(/\s+/)[0];
+    if (firstWord && firstWord.length >= 4) {
+      const guessUrl = `https://icon.horse/icon/${firstWord.toLowerCase()}.com`;
+      if (!brokenLogos.has(guessUrl)) return guessUrl;
+    }
   }
 
   return null;
