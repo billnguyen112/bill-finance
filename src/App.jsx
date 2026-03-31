@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 
 // ── Data ──────────────────────────────────────────────
 const ACCOUNTS = [
-  { name: "IBKR", type: "Brokerage", balance: 14820.5, change: 3.2, currency: "USD" },
-  { name: "Trading 212 ISA", type: "ISA", balance: 8340.15, change: 1.8, currency: "GBP" },
+  { name: "IBKR ISA", type: "Brokerage", balance: 7712.68, change: -0.5, currency: "USD" },
+  { name: "Trading 212 ISA", type: "ISA", balance: 918, change: null, currency: "GBP" },
   { name: "Kraken", type: "Crypto", balance: 0, change: 0, currency: "GBP" },
   { name: "Monzo", type: "Bank", balance: 2145.8, change: null, currency: "GBP" },
   { name: "HSBC", type: "Bank", balance: 5620.3, change: null, currency: "GBP" },
@@ -11,15 +11,12 @@ const ACCOUNTS = [
 ];
 
 const HOLDINGS = [
-  { ticker: "TSEM", name: "Tower Semi", value: 3200, costBasis: 2650, pnl: 12.4, account: "IBKR", sparkline: [42, 45, 43, 48, 52, 55, 53, 58] },
-  { ticker: "FTC.L", name: "Filtronic", value: 2800, costBasis: 2890, pnl: -3.1, account: "IBKR", sparkline: [38, 40, 37, 35, 36, 34, 33, 35] },
-  { ticker: "SIVE", name: "Sievert Larsen", value: 2100, costBasis: 1880, pnl: 8.7, account: "IBKR", sparkline: [20, 22, 21, 24, 23, 25, 27, 26] },
-  { ticker: "IQE", name: "IQE plc", value: 1900, costBasis: 1923, pnl: -1.2, account: "IBKR", sparkline: [15, 16, 15, 14, 15, 14, 13, 14] },
-  { ticker: "GLD", name: "SPDR Gold", value: 2400, costBasis: 2240, pnl: 5.6, account: "IBKR", sparkline: [180, 182, 185, 183, 188, 190, 192, 194] },
-  { ticker: "META", name: "Meta Platforms", value: 2420, costBasis: 2370, pnl: 2.1, account: "IBKR", sparkline: [500, 510, 505, 520, 515, 525, 530, 528] },
-  { ticker: "VUSA", name: "Vanguard S&P 500", value: 4200, costBasis: 3920, pnl: 4.3, account: "T212", sparkline: [72, 73, 74, 73, 75, 76, 77, 78] },
-  { ticker: "SMT.L", name: "Scottish Mortgage", value: 2100, costBasis: 2117, pnl: -0.8, account: "T212", sparkline: [900, 910, 895, 880, 890, 885, 880, 875] },
-  { ticker: "EQQQ", name: "Invesco NASDAQ", value: 2040, costBasis: 1978, pnl: 3.1, account: "T212", sparkline: [340, 345, 342, 350, 348, 355, 358, 360] },
+  { ticker: "SIVE", name: "Sivers Semiconductors", value: 758, costBasis: 950, pnl: -20.2, account: "IBKR", sparkline: [12, 11, 10, 10, 11, 10, 10, 10] },
+  { ticker: "META", name: "Meta Platforms", value: 2030, costBasis: 2670, pnl: -24.0, account: "IBKR", sparkline: [560, 550, 540, 535, 530, 534, 533, 534] },
+  { ticker: "SOI", name: "S.O.I.T.E.C.", value: 1100, costBasis: 1295, pnl: -15.1, account: "IBKR", sparkline: [55, 54, 53, 52, 52, 51, 52, 52] },
+  { ticker: "LNSR", name: "Lensar Inc", value: 891, costBasis: 1168, pnl: -23.7, account: "IBKR", sparkline: [7, 6.5, 6.2, 6, 5.9, 5.8, 5.8, 5.84] },
+  { ticker: "TSEM", name: "Tower Semiconductor", value: 601, costBasis: 793, pnl: -24.2, account: "IBKR", sparkline: [165, 162, 160, 158, 159, 158, 158, 158] },
+  { ticker: "IQE", name: "IQE plc", value: 918, costBasis: 1050, pnl: -12.6, account: "T212", sparkline: [0.25, 0.24, 0.23, 0.23, 0.22, 0.23, 0.23, 0.23] },
 ];
 
 const CATEGORIES = [
@@ -35,15 +32,20 @@ const CATEGORIES = [
   { id: "health", label: "Health", icon: "\u{1F48A}", color: "#f87171", budget: 40 },
   { id: "income", label: "Income", icon: "\u{1F4B0}", color: "#34d399", budget: 0 },
   { id: "work_travel", label: "Work Travel", icon: "\u2708\uFE0F", color: "#38bdf8", budget: 0 },
+  { id: "transfer", label: "Transfer", icon: "\u{1F504}", color: "#71717a", budget: 0 },
+  { id: "investment", label: "Investment", icon: "\u{1F4C8}", color: "#6366f1", budget: 0 },
   { id: "general", label: "General", icon: "\u{1F4CC}", color: "#a1a1aa", budget: 0 },
 ];
 
-const RECURRING = [
-  { merchant: "Rightmove Rent", amount: 1050, categoryId: "housing", frequency: "Monthly", nextDate: "27 Apr" },
-  { merchant: "Emma", amount: 9.99, categoryId: "subscriptions", frequency: "Monthly", nextDate: "29 Apr" },
-  { merchant: "Netflix", amount: 10.99, categoryId: "subscriptions", frequency: "Monthly", nextDate: "25 Apr" },
-  { merchant: "TfL Auto Top-up", amount: 20, categoryId: "transport", frequency: "Weekly", nextDate: "2 Apr" },
-  { merchant: "Vietnam Family Transfer", amount: 245.35, categoryId: "family", frequency: "Monthly", nextDate: "24 Apr" },
+// Categories excluded from spending analytics and budgets
+const EXCLUDED_FROM_SPENDING = ["income", "work_travel", "transfer", "investment"];
+
+const DEFAULT_RECURRING = [
+  { id: "r1", merchant: "Rightmove Rent", amount: 1050, categoryId: "housing", frequency: "Monthly", nextDate: "27 Apr" },
+  { id: "r2", merchant: "Emma", amount: 9.99, categoryId: "subscriptions", frequency: "Monthly", nextDate: "29 Apr" },
+  { id: "r3", merchant: "Netflix", amount: 10.99, categoryId: "subscriptions", frequency: "Monthly", nextDate: "25 Apr" },
+  { id: "r4", merchant: "TfL Auto Top-up", amount: 20, categoryId: "transport", frequency: "Weekly", nextDate: "2 Apr" },
+  { id: "r5", merchant: "Vietnam Family Transfer", amount: 245.35, categoryId: "family", frequency: "Monthly", nextDate: "24 Apr" },
 ];
 
 const initialTransactions = [
@@ -206,17 +208,66 @@ function CategoryPicker({ onSelect, onClose }) {
   );
 }
 
+// ── Auto-categorization ──────────────────────────────
+const CATEGORY_RULES = [
+  // Housing
+  { pattern: /rent|mortgage|rightmove|openrent|letting|housing/i, categoryId: "housing" },
+  // Eating out
+  { pattern: /pret|starbucks|costa|mcdonald|burger|nando|wagamama|pizza|kebab|sushi|cafe|coffee|restaurant|dining|deliveroo|uber\s*eats|just\s*eat|dine|grill|kitchen|bistro|brasserie|bar\s|pub\s|salad|greggs|subway|kfc|domino|five\s*guys|leon|itsu|wasabi|eat\b|food\s*hall|canteen/i, categoryId: "eating_out" },
+  // Groceries
+  { pattern: /tesco|sainsbury|asda|aldi|lidl|waitrose|morrisons|co-?op|ocado|marks.*spencer|m&s\s*food|grocery|supermarket|iceland/i, categoryId: "groceries" },
+  // Transport
+  { pattern: /tfl|uber(?!\s*eat)|bolt|lime|taxi|cab|train|rail|bus|parking|petrol|fuel|shell|bp\s|esso|car\s*wash|congestion|oyster|citymapper/i, categoryId: "transport" },
+  // Shopping
+  { pattern: /amazon|ebay|asos|zara|h&m|primark|nike|adidas|uniqlo|john\s*lewis|argos|currys|ikea|apple\.com|google\s*store|samsung/i, categoryId: "shopping" },
+  // Entertainment
+  { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s|now\s*tv|theatre|concert|ticket/i, categoryId: "entertainment" },
+  // Subscriptions
+  { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium/i, categoryId: "subscriptions" },
+  // Bills
+  { pattern: /electric|gas\b|water|council\s*tax|internet|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin|bt\s|ee\s|vodafone|three\s|o2\s/i, categoryId: "bills" },
+  // Health
+  { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|eye|boots\s*optician|specsaver|gym|fitness|health/i, categoryId: "health" },
+  // Family
+  { pattern: /family|transfer.*viet|remittance|wise.*vn|moneygram|western\s*union/i, categoryId: "family" },
+  // Work/Travel
+  { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air/i, categoryId: "work_travel" },
+  // Income
+  { pattern: /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance/i, categoryId: "income" },
+  // Transfers (net-zero moves between own accounts)
+  { pattern: /transfer|pot\s|savings\s*goal|monzo.*monzo|revolut.*revolut|internal|between\s*accounts|moving\s*money/i, categoryId: "transfer" },
+  // Investments
+  { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube/i, categoryId: "investment" },
+];
+
+function categorize(merchantName, description, tlCategory, amount) {
+  // Income detection
+  if (amount > 0) return "income";
+
+  const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
+
+  // Try keyword matching
+  for (const rule of CATEGORY_RULES) {
+    if (rule.pattern.test(text)) return rule.categoryId;
+  }
+
+  // Fallback to TrueLayer category
+  if (tlCategory === "TRANSFER") return "transfer";
+  if (tlCategory === "PURCHASE") return "shopping";
+  if (tlCategory === "BILL_PAYMENT") return "bills";
+
+  return "general";
+}
+
 // ── TrueLayer helpers ────────────────────────────────
 function mapTx(tx, accountName) {
+  const amount = tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
   return {
     id: `tl_${tx.transaction_id}`,
     date: new Date(tx.timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
     merchant: tx.merchant_name || tx.description || "Unknown",
-    amount: tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount),
-    categoryId: tx.transaction_category === "PURCHASE" ? "shopping"
-      : tx.transaction_category === "BILL_PAYMENT" ? "bills"
-      : tx.transaction_category === "TRANSFER" ? "general"
-      : "general",
+    amount,
+    categoryId: categorize(tx.merchant_name, tx.description, tx.transaction_category, amount),
     pending: tx.transaction_classification?.includes("PENDING") || false,
     source: "truelayer",
     accountName: accountName || "Bank",
@@ -294,6 +345,14 @@ export default function Dashboard() {
   const [tlTransactions, setTlTransactions] = useState([]);
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState(null);
+  const [categoryOverrides, setCategoryOverrides] = useState(() => JSON.parse(localStorage.getItem("tl_cat_overrides") || "{}"));
+  const [budgetOverrides, setBudgetOverrides] = useState(() => JSON.parse(localStorage.getItem("budget_overrides") || "{}"));
+  const [editingBudget, setEditingBudget] = useState(null);
+  const [analyticsRange, setAnalyticsRange] = useState("payday"); // payday, 30d, 90d, custom, all
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
+  const [recurring, setRecurring] = useState(() => JSON.parse(localStorage.getItem("recurring_items") || "null") || DEFAULT_RECURRING);
+  const [editingRecurring, setEditingRecurring] = useState(null);
 
   // Handle OAuth callback — token comes back from Express server via redirect
   useEffect(() => {
@@ -396,17 +455,20 @@ export default function Dashboard() {
     ? [...ACCOUNTS.filter((a) => a.type !== "Bank"), ...bankAccounts]
     : ACCOUNTS;
 
-  // Merge transactions
-  const mergedTransactions = tlTransactions.length > 0
-    ? [...tlTransactions, ...initialTransactions.filter((t) => !["income", "work_travel"].includes(t.categoryId) === false || true)]
-    : initialTransactions;
+  // Use live transactions when connected, fallback to manual for demo
+  // Apply any manual category overrides
+  const allTransactions = useMemo(() => {
+    const txns = tlTransactions.length > 0 ? tlTransactions : transactions;
+    return txns.map((t) => categoryOverrides[t.id] ? { ...t, categoryId: categoryOverrides[t.id] } : t);
+  }, [tlTransactions, transactions, categoryOverrides]);
 
   const totalNetWorth = mergedAccounts.reduce((s, a) => s + a.balance, 0);
   const totalInvested = mergedAccounts.filter((a) => ["Brokerage", "ISA", "Private Equity", "Crypto"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
   const totalCash = mergedAccounts.filter((a) => a.type === "Bank").reduce((s, a) => s + a.balance, 0);
 
-  const income = useMemo(() => transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0), [transactions]);
-  const spending = useMemo(() => transactions.filter((t) => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0), [transactions]);
+  const NEUTRAL_CATS = ["transfer", "investment"]; // these net out, excluded from both income and spending
+  const income = useMemo(() => allTransactions.filter((t) => t.amount > 0 && !NEUTRAL_CATS.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [allTransactions]);
+  const spending = useMemo(() => allTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [allTransactions]);
   const netFlow = income - spending;
   const savingsRate = income > 0 ? Math.round(((income - spending) / income) * 100) : 0;
 
@@ -414,21 +476,54 @@ export default function Dashboard() {
 
   const categorySpending = useMemo(() => {
     const map = {};
-    transactions.filter((t) => t.amount < 0).forEach((t) => {
+    allTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).forEach((t) => {
       if (!map[t.categoryId]) map[t.categoryId] = { total: 0, count: 0 };
       map[t.categoryId].total += Math.abs(t.amount);
       map[t.categoryId].count += 1;
     });
     return map;
-  }, [transactions]);
+  }, [allTransactions]);
 
-  const totalBudget = CATEGORIES.filter((c) => c.budget > 0).reduce((s, c) => s + c.budget, 0);
-  const discretionarySpend = CATEGORIES.filter((c) => c.budget > 0).reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
-  const committedSpend = (categorySpending["housing"]?.total || 0) + (categorySpending["bills"]?.total || 0) + (categorySpending["subscriptions"]?.total || 0);
-  const variableSpend = discretionarySpend - committedSpend;
-  const daysLeft = 29;
+  const getBudget = (catId) => budgetOverrides[catId] ?? CATEGORIES.find((c) => c.id === catId)?.budget ?? 0;
+  const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
+  const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
+  const discretionarySpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
+  const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
+  const committedSpend = recurringTotal;
+  const variableSpend = discretionarySpend - Math.min(committedSpend, discretionarySpend);
+  const daysInPeriod = 31;
+  const dayOfPeriod = new Date().getDate();
+  const daysLeft = Math.max(daysInPeriod - dayOfPeriod, 1);
   const dailyAllowance = Math.max((totalBudget - discretionarySpend) / daysLeft, 0);
-  const recurringTotal = RECURRING.reduce((s, r) => s + r.amount, 0);
+
+  const saveRecurring = (items) => {
+    setRecurring(items);
+    localStorage.setItem("recurring_items", JSON.stringify(items));
+  };
+
+  const updateRecurringItem = (id, field, value) => {
+    const updated = recurring.map((r) => r.id === id ? { ...r, [field]: field === "amount" ? Number(value) : value } : r);
+    saveRecurring(updated);
+  };
+
+  const deleteRecurringItem = (id) => {
+    saveRecurring(recurring.filter((r) => r.id !== id));
+  };
+
+  const addRecurringItem = () => {
+    const newItem = { id: `r${Date.now()}`, merchant: "New Item", amount: 0, categoryId: "general", frequency: "Monthly", nextDate: "" };
+    saveRecurring([...recurring, newItem]);
+    setEditingRecurring(newItem.id);
+  };
+
+  const saveBudget = (catId, amount) => {
+    setBudgetOverrides((prev) => {
+      const updated = { ...prev, [catId]: Number(amount) };
+      localStorage.setItem("budget_overrides", JSON.stringify(updated));
+      return updated;
+    });
+    setEditingBudget(null);
+  };
 
   // Holdings P&L
   const totalCurrentValue = HOLDINGS.reduce((s, h) => s + h.value, 0);
@@ -446,7 +541,16 @@ export default function Dashboard() {
   }, [holdingsSort]);
 
   const handleCategoryChange = (txId, newCatId) => {
+    // For hardcoded transactions
     setTransactions((prev) => prev.map((t) => (t.id === txId ? { ...t, categoryId: newCatId } : t)));
+    // For TrueLayer transactions — store override
+    if (String(txId).startsWith("tl_")) {
+      setCategoryOverrides((prev) => {
+        const updated = { ...prev, [txId]: newCatId };
+        localStorage.setItem("tl_cat_overrides", JSON.stringify(updated));
+        return updated;
+      });
+    }
     setEditingTx(null);
   };
 
@@ -505,12 +609,7 @@ export default function Dashboard() {
           <div style={sectionLabel}>ACCOUNTS</div>
 
           {/* TrueLayer Connect / Status */}
-          {tlTokens.length === 0 ? (
-            <button onClick={startBankConnect}
-              style={{ width: "100%", padding: "14px 16px", marginBottom: 12, background: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: "none", borderRadius: 12, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              <span style={{ fontSize: 18 }}>🏦</span> Connect Your Bank
-            </button>
-          ) : (
+          {tlTokens.length > 0 && (
             <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, borderColor: "rgba(99,102,241,0.3)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 16 }}>🏦</span>
@@ -531,6 +630,10 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+          <button onClick={startBankConnect}
+            style={{ width: "100%", padding: "12px 16px", marginBottom: 12, background: tlTokens.length > 0 ? "rgba(99,102,241,0.1)" : "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: tlTokens.length > 0 ? "1px solid rgba(99,102,241,0.3)" : "none", borderRadius: 12, color: tlTokens.length > 0 ? "#818cf8" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>+</span> {tlTokens.length > 0 ? "Add Another Bank" : "Connect Your Bank"}
+          </button>
           {bankError && (
             <div style={{ ...card, marginBottom: 12, borderColor: "rgba(239,68,68,0.3)", color: "#ef4444", fontSize: 12 }}>
               Error: {bankError}
@@ -680,14 +783,14 @@ export default function Dashboard() {
       {/* ═══ TRANSACTIONS ═══ */}
       {activeTab === "transactions" && (
         <div style={{ padding: "0 20px" }}>
-          {transactions.some((t) => t.pending) && (
+          {allTransactions.some((t) => t.pending) && (
             <>
               <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between" }}>
                 <span>PENDING</span>
-                <span style={{ color: "#ef4444" }}>-{"\u00A3"}{transactions.filter((t) => t.pending && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(2)}</span>
+                <span style={{ color: "#ef4444" }}>-{"\u00A3"}{allTransactions.filter((t) => t.pending && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(2)}</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {transactions.filter((t) => t.pending).map((tx) => {
+                {allTransactions.filter((t) => t.pending).map((tx) => {
                   const cat = getCat(tx.categoryId);
                   return (
                     <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
@@ -707,7 +810,7 @@ export default function Dashboard() {
           )}
           <div style={sectionLabel}>SETTLED</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {transactions.filter((t) => !t.pending).map((tx) => {
+            {allTransactions.filter((t) => !t.pending).map((tx) => {
               const cat = getCat(tx.categoryId);
               return (
                 <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
@@ -754,45 +857,97 @@ export default function Dashboard() {
           </div>
 
           {/* Recurring */}
-          <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between" }}>
+          <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>RECURRING</span>
-            <span style={{ color: "#a1a1aa" }}>{"\u00A3"}{recurringTotal.toFixed(2)}/mo</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ color: "#a1a1aa", fontSize: 12 }}>{"\u00A3"}{recurringTotal.toFixed(2)}/mo</span>
+              <button onClick={() => setEditingRecurring(editingRecurring === "all" ? null : "all")}
+                style={{ background: "none", border: "none", color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                {editingRecurring === "all" ? "Done" : "Edit"}
+              </button>
+            </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 8 }}>
-            {RECURRING.map((r, i) => {
+            {recurring.map((r) => {
               const cat = getCat(r.categoryId);
               return (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
                     <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{r.merchant}</div>
-                      <div style={{ fontSize: 11, color: "#52525b" }}>{r.frequency} {"\u00B7"} Next: {r.nextDate}</div>
+                    <div style={{ flex: 1 }}>
+                      {editingRecurring === "all" ? (
+                        <input defaultValue={r.merchant} onBlur={(e) => updateRecurringItem(r.id, "merchant", e.target.value)}
+                          style={{ width: "100%", padding: "2px 4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 4, color: "#e4e4e7", fontSize: 13 }} />
+                      ) : (
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{r.merchant}</div>
+                      )}
+                      <div style={{ fontSize: 11, color: "#52525b" }}>{r.frequency}{r.nextDate ? ` \u00B7 Next: ${r.nextDate}` : ""}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{r.amount.toFixed(2)}</div>
+                  {editingRecurring === "all" ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}</span>
+                      <input type="number" defaultValue={r.amount} onBlur={(e) => updateRecurringItem(r.id, "amount", e.target.value)}
+                        style={{ width: 60, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "#e4e4e7", fontSize: 13, textAlign: "right" }} />
+                      <button onClick={() => deleteRecurringItem(r.id)}
+                        style={{ background: "none", border: "none", color: "#ef4444", fontSize: 16, cursor: "pointer", padding: "0 4px" }}>{"\u2715"}</button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{r.amount.toFixed(2)}</div>
+                  )}
                 </div>
               );
             })}
+            {editingRecurring === "all" && (
+              <button onClick={addRecurringItem}
+                style={{ padding: "10px", background: "rgba(255,255,255,0.04)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 10, color: "#71717a", fontSize: 12, cursor: "pointer" }}>
+                + Add recurring item
+              </button>
+            )}
           </div>
 
           {/* Category budgets */}
-          <div style={sectionLabel}>CATEGORY BUDGETS</div>
+          <div style={{ ...sectionLabel, display: "flex", justifyContent: "space-between" }}>
+            <span>CATEGORY BUDGETS</span>
+            <button onClick={() => setEditingBudget(editingBudget === "all" ? null : "all")}
+              style={{ background: "none", border: "none", color: "#818cf8", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+              {editingBudget === "all" ? "Done" : "Edit"}
+            </button>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {CATEGORIES.filter((c) => c.budget > 0).map((cat) => {
+            {CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id)).map((cat) => {
+              const budget = getBudget(cat.id);
               const spent = categorySpending[cat.id]?.total || 0;
-              const isOver = spent > cat.budget;
-              const left = cat.budget - spent;
+              const isOver = budget > 0 && spent > budget;
+              const left = budget - spent;
               return (
                 <div key={cat.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 16 }}>{cat.icon}</span><span style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</span></div>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>-{"\u00A3"}{spent.toFixed(2)}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 16 }}>{cat.icon}</span>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</span>
+                    </div>
+                    {editingBudget === "all" ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}</span>
+                        <input type="number" defaultValue={budget} onBlur={(e) => saveBudget(cat.id, e.target.value)}
+                          style={{ width: 60, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "#e4e4e7", fontSize: 13, fontWeight: 600, textAlign: "right" }} />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{spent > 0 ? `-\u00A3${spent.toFixed(2)}` : "\u00A30"}</span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 11, color: isOver ? "#ef4444" : "#71717a", marginBottom: 6 }}>
-                    {isOver ? `\u00A3${(spent - cat.budget).toFixed(2)} over budget of \u00A3${cat.budget.toFixed(0)}` : `\u00A3${left.toFixed(2)} left of \u00A3${cat.budget.toFixed(0)}`}
-                  </div>
-                  <ProgressBar value={spent} max={cat.budget} color={cat.color} />
+                  {budget > 0 && (
+                    <>
+                      <div style={{ fontSize: 11, color: isOver ? "#ef4444" : "#71717a", marginBottom: 6 }}>
+                        {isOver ? `\u00A3${(spent - budget).toFixed(2)} over budget of \u00A3${budget.toFixed(0)}` : `\u00A3${left.toFixed(2)} left of \u00A3${budget.toFixed(0)}`}
+                      </div>
+                      <ProgressBar value={spent} max={budget} color={cat.color} />
+                    </>
+                  )}
+                  {budget === 0 && !editingBudget && spent > 0 && (
+                    <div style={{ fontSize: 11, color: "#52525b" }}>No budget set</div>
+                  )}
                 </div>
               );
             })}
@@ -801,42 +956,210 @@ export default function Dashboard() {
       )}
 
       {/* ═══ ANALYTICS ═══ */}
-      {activeTab === "analytics" && (
+      {activeTab === "analytics" && (() => {
+        // Time-filtered transactions
+        const now = new Date();
+        const ranges = {
+          payday: { label: "Payday", days: now.getDate() <= 27 ? now.getDate() + (30 - 27) : now.getDate() - 27 },
+          "30d": { label: "30 Days", days: 30 },
+          "90d": { label: "3 Months", days: 90 },
+          custom: { label: "Custom", days: 0 },
+          all: { label: "All", days: 9999 },
+        };
+        let cutoff;
+        let cutoffEnd = now;
+        if (analyticsRange === "custom" && customDateFrom) {
+          cutoff = new Date(customDateFrom);
+          cutoffEnd = customDateTo ? new Date(customDateTo) : now;
+        } else {
+          cutoff = new Date(now.getTime() - (ranges[analyticsRange]?.days || 30) * 86400000);
+        }
+
+        // Parse date strings back to comparable dates
+        const parseDate = (d) => {
+          const parts = d.split(" ");
+          const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+          return new Date(now.getFullYear(), months[parts[1]] ?? 0, parseInt(parts[0]) || 1);
+        };
+
+        const filteredTxns = allTransactions.filter((t) => {
+          const d = parseDate(t.date);
+          return d >= cutoff && d <= cutoffEnd;
+        });
+        const spendTxns = filteredTxns.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
+        const incomeTxns = filteredTxns.filter((t) => t.amount > 0 && !NEUTRAL_CATS.includes(t.categoryId));
+        const fIncome = incomeTxns.reduce((s, t) => s + t.amount, 0);
+        const fSpending = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
+        const fNet = fIncome - fSpending;
+
+        // Category breakdown with percentages
+        const catMap = {};
+        spendTxns.forEach((t) => {
+          if (!catMap[t.categoryId]) catMap[t.categoryId] = { total: 0, count: 0 };
+          catMap[t.categoryId].total += Math.abs(t.amount);
+          catMap[t.categoryId].count += 1;
+        });
+        const sortedCats = CATEGORIES
+          .filter((c) => catMap[c.id] && !EXCLUDED_FROM_SPENDING.includes(c.id))
+          .sort((a, b) => (catMap[b.id]?.total || 0) - (catMap[a.id]?.total || 0));
+
+        // Daily average
+        const daysInRange = Math.max(ranges[analyticsRange].days, 1);
+        const dailyAvg = fSpending / Math.min(daysInRange, 30);
+
+        // Top merchants
+        const merchantMap = {};
+        spendTxns.forEach((t) => {
+          const key = t.merchant;
+          if (!merchantMap[key]) merchantMap[key] = { total: 0, count: 0 };
+          merchantMap[key].total += Math.abs(t.amount);
+          merchantMap[key].count += 1;
+        });
+        const topMerchants = Object.entries(merchantMap).sort((a, b) => b[1].total - a[1].total).slice(0, 5);
+
+        return (
         <div style={{ padding: "0 20px" }}>
-          <div style={sectionLabel}>{budgetPeriod.start.toUpperCase()} {"\u2013"} {budgetPeriod.end.toUpperCase()}</div>
+          {/* Time range selector */}
+          <div style={{ display: "flex", gap: 6, marginTop: 20, marginBottom: 16 }}>
+            {Object.entries(ranges).map(([key, { label }]) => (
+              <button key={key} onClick={() => setAnalyticsRange(key)}
+                style={{ flex: 1, padding: "7px 0", fontSize: 11, border: "none", borderRadius: 8, cursor: "pointer",
+                  background: analyticsRange === key ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.04)",
+                  color: analyticsRange === key ? "#34d399" : "#71717a",
+                  fontWeight: analyticsRange === key ? 600 : 400 }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {analyticsRange === "custom" && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>From</div>
+                <input type="date" value={customDateFrom} onChange={(e) => setCustomDateFrom(e.target.value)}
+                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, color: "#71717a", marginBottom: 4 }}>To</div>
+                <input type="date" value={customDateTo} onChange={(e) => setCustomDateTo(e.target.value)}
+                  style={{ width: "100%", padding: "8px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, color: "#e4e4e7", fontSize: 13 }} />
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
           <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: "#71717a" }}>Summary</div>
-            <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4, color: netFlow >= 0 ? "#34d399" : "#ef4444" }}>{netFlow >= 0 ? "+" : ""}{"\u00A3"}{netFlow.toFixed(2)}</div>
-            <BarChart income={income} spending={spending} maxVal={Math.max(income, spending) * 1.1} />
+            <div style={{ fontSize: 11, color: "#71717a" }}>Net Flow</div>
+            <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4, color: fNet >= 0 ? "#34d399" : "#ef4444" }}>{fNet >= 0 ? "+" : ""}{"\u00A3"}{fNet.toFixed(2)}</div>
+            <BarChart income={fIncome} spending={fSpending} maxVal={Math.max(fIncome, fSpending) * 1.1} />
             <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22d3ee" }} />
-                <div><div style={{ fontSize: 11, color: "#71717a" }}>Income</div><div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{income.toFixed(2)}</div></div>
+                <div><div style={{ fontSize: 11, color: "#71717a" }}>Income</div><div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{fIncome.toFixed(2)}</div></div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f472b6" }} />
-                <div><div style={{ fontSize: 11, color: "#71717a" }}>Spending</div><div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{spending.toFixed(2)}</div></div>
+                <div><div style={{ fontSize: 11, color: "#71717a" }}>Spending</div><div style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{fSpending.toFixed(2)}</div></div>
               </div>
             </div>
           </div>
+
+          {/* Quick stats */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: 14 }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Daily Avg</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#f472b6", marginTop: 4 }}>{"\u00A3"}{dailyAvg.toFixed(2)}</div>
+            </div>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: 14 }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Transactions</div>
+              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>{spendTxns.length}</div>
+            </div>
+            <div style={{ ...card, flex: 1, textAlign: "center", padding: 14 }}>
+              <div style={{ fontSize: 11, color: "#71717a" }}>Savings Rate</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: fIncome > 0 ? (fNet / fIncome > 0.3 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 4 }}>{fIncome > 0 ? Math.round((fNet / fIncome) * 100) : 0}%</div>
+            </div>
+          </div>
+
+          {/* Spending by category with percentages and bars */}
           <div style={sectionLabel}>SPENDING BY CATEGORY</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {CATEGORIES.filter((c) => categorySpending[c.id] && c.id !== "income" && c.id !== "work_travel").sort((a, b) => (categorySpending[b.id]?.total || 0) - (categorySpending[a.id]?.total || 0)).map((cat) => {
-              const data = categorySpending[cat.id];
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+            {sortedCats.map((cat) => {
+              const data = catMap[cat.id];
+              const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
+              const budget = getBudget(cat.id);
+              const overBudget = budget > 0 && data.total > budget;
               return (
-                <div key={cat.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                    <div><div style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</div><div style={{ fontSize: 11, color: "#71717a" }}>{data.count} txn{data.count !== 1 ? "s" : ""}</div></div>
+                <div key={cat.id} style={{ padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 18 }}>{cat.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500 }}>{cat.label}</div>
+                        <div style={{ fontSize: 11, color: "#71717a" }}>{data.count} txn{data.count !== 1 ? "s" : ""} {"\u00B7"} {pct.toFixed(1)}%</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
+                      {overBudget && <div style={{ fontSize: 10, color: "#ef4444" }}>{"\u00A3"}{(data.total - budget).toFixed(0)} over</div>}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
+                  <div style={{ width: "100%", height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2 }}>
+                    <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: cat.color, borderRadius: 2, transition: "width 0.4s" }} />
+                  </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Top merchants */}
+          <div style={sectionLabel}>TOP MERCHANTS</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 16 }}>
+            {topMerchants.map(([name, data], i) => (
+              <div key={name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#52525b", width: 20 }}>{i + 1}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500 }}>{name}</div>
+                    <div style={{ fontSize: 11, color: "#71717a" }}>{data.count} txn{data.count !== 1 ? "s" : ""}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{data.total.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Insights */}
+          <div style={sectionLabel}>INSIGHTS</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+            {sortedCats.length > 0 && (
+              <div style={{ ...card, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Biggest category</div>
+                <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
+                  {sortedCats[0].icon} {sortedCats[0].label} is {((catMap[sortedCats[0].id].total / fSpending) * 100).toFixed(0)}% of your spending ({"\u00A3"}{catMap[sortedCats[0].id].total.toFixed(2)})
+                </div>
+              </div>
+            )}
+            {topMerchants.length > 0 && (
+              <div style={{ ...card, padding: 14 }}>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>Most visited</div>
+                <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
+                  {topMerchants[0][0]} — {topMerchants[0][1].count} visits totalling {"\u00A3"}{topMerchants[0][1].total.toFixed(2)}
+                </div>
+              </div>
+            )}
+            {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).length > 0 && (
+              <div style={{ ...card, padding: 14, borderColor: "rgba(239,68,68,0.3)" }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: "#ef4444" }}>Over budget</div>
+                <div style={{ fontSize: 12, color: "#71717a", marginTop: 4 }}>
+                  {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).map((c) => `${c.icon} ${c.label}`).join(", ")} — consider cutting back
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Income */}
           <div style={sectionLabel}>INCOME</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {transactions.filter((t) => t.amount > 0).map((tx) => {
+            {incomeTxns.map((tx) => {
               const cat = getCat(tx.categoryId);
               return (
                 <div key={tx.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "rgba(255,255,255,0.02)", borderRadius: 10 }}>
@@ -850,7 +1173,8 @@ export default function Dashboard() {
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {editingTx !== null && <CategoryPicker onSelect={(catId) => handleCategoryChange(editingTx, catId)} onClose={() => setEditingTx(null)} />}
       <div style={{ textAlign: "center", padding: "30px 20px 10px", fontSize: 11, color: "#3f3f46" }}>
