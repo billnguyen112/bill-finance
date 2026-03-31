@@ -207,6 +207,21 @@ function CategoryPicker({ onSelect, onClose }) {
 }
 
 // ── TrueLayer helpers ────────────────────────────────
+function mapTx(tx, accountName) {
+  return {
+    id: `tl_${tx.transaction_id}`,
+    date: new Date(tx.timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+    merchant: tx.merchant_name || tx.description || "Unknown",
+    amount: tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount),
+    categoryId: tx.transaction_category === "PURCHASE" ? "shopping"
+      : tx.transaction_category === "BILL_PAYMENT" ? "bills"
+      : tx.transaction_category === "TRANSFER" ? "general"
+      : "general",
+    pending: tx.transaction_classification?.includes("PENDING") || false,
+    source: "truelayer",
+    accountName: accountName || "Bank",
+  };
+}
 async function startBankConnect() {
   const res = await fetch("/api/connect");
   const { url } = await res.json();
@@ -243,6 +258,27 @@ async function fetchTransactions(token, accountId) {
   return res.json();
 }
 
+async function fetchCards(token) {
+  const res = await fetch("/api/cards", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
+
+async function fetchCardBalance(token, cardId) {
+  const res = await fetch(`/api/cards/${cardId}/balance`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
+
+async function fetchCardTransactions(token, cardId) {
+  const res = await fetch(`/api/cards/${cardId}/transactions`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
+
 // ── Main ──────────────────────────────────────────────
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -251,8 +287,9 @@ export default function Dashboard() {
   const [holdingsSort, setHoldingsSort] = useState("pnl_abs");
   const budgetPeriod = { start: "27 Mar", end: "27 Apr" };
 
-  // TrueLayer state
-  const [tlToken, setTlToken] = useState(() => localStorage.getItem("tl_token") || null);
+  // TrueLayer state — array of tokens, one per connected bank
+  const [tlTokens, setTlTokens] = useState(() => JSON.parse(localStorage.getItem("tl_tokens") || "[]"));
+  const tlToken = tlTokens[0] || null; // for backwards compat
   const [tlAccounts, setTlAccounts] = useState([]);
   const [tlTransactions, setTlTransactions] = useState([]);
   const [bankLoading, setBankLoading] = useState(false);
@@ -265,80 +302,81 @@ export default function Dashboard() {
     const error = params.get("tl_error");
     window.history.replaceState({}, "", window.location.pathname);
     if (token) {
-      localStorage.setItem("tl_token", token);
-      setTlToken(token);
+      setTlTokens((prev) => {
+        const updated = [...prev.filter((t) => t !== token), token];
+        localStorage.setItem("tl_tokens", JSON.stringify(updated));
+        return updated;
+      });
     } else if (error) {
       setBankError(error);
     }
   }, []);
 
-  // Fetch bank data when token is available
+  // Fetch bank data across all connected tokens
   const loadBankData = useCallback(async () => {
-    if (!tlToken) return;
+    if (tlTokens.length === 0) return;
     setBankLoading(true);
     setBankError(null);
-    try {
-      const accountsRes = await fetchAccounts(tlToken);
-      const accounts = accountsRes.results || [];
+    const allAccounts = [];
+    const allTxns = [];
 
-      // Fetch balances for each account
-      const withBalances = await Promise.all(
-        accounts.map(async (acc) => {
+    for (const token of tlTokens) {
+      try {
+        // Fetch current/savings accounts
+        const accountsRes = await fetchAccounts(token);
+        const accounts = accountsRes.results || [];
+        for (const acc of accounts) {
           try {
-            const balRes = await fetchBalance(tlToken, acc.account_id);
+            const balRes = await fetchBalance(token, acc.account_id);
             const bal = balRes.results?.[0];
-            return { ...acc, balance: bal?.current || 0, currency: bal?.currency || acc.currency };
-          } catch {
-            return { ...acc, balance: 0 };
-          }
-        })
-      );
-      setTlAccounts(withBalances);
+            allAccounts.push({ ...acc, balance: bal?.current || 0, currency: bal?.currency || "GBP", source: "truelayer" });
+          } catch { allAccounts.push({ ...acc, balance: 0, source: "truelayer" }); }
+          try {
+            const txRes = await fetchTransactions(token, acc.account_id);
+            (txRes.results || []).forEach((tx) => allTxns.push(mapTx(tx, acc.display_name)));
+          } catch { /* skip */ }
+        }
 
-      // Fetch transactions for each account
-      const allTxns = [];
-      for (const acc of accounts) {
-        try {
-          const txRes = await fetchTransactions(tlToken, acc.account_id);
-          const txns = txRes.results || [];
-          txns.forEach((tx) => {
-            allTxns.push({
-              id: `tl_${tx.transaction_id}`,
-              date: new Date(tx.timestamp).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
-              merchant: tx.merchant_name || tx.description || "Unknown",
-              amount: tx.transaction_type === "DEBIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount),
-              categoryId: tx.transaction_category === "PURCHASE" ? "shopping"
-                : tx.transaction_category === "BILL_PAYMENT" ? "bills"
-                : tx.transaction_category === "TRANSFER" ? "general"
-                : "general",
-              pending: tx.transaction_classification?.includes("PENDING") || false,
+        // Fetch credit cards
+        const cardsRes = await fetchCards(token);
+        const cards = cardsRes.results || [];
+        for (const card of cards) {
+          try {
+            const balRes = await fetchCardBalance(token, card.account_id);
+            const bal = balRes.results?.[0];
+            allAccounts.push({
+              ...card,
+              display_name: card.display_name || card.card_type || "Credit Card",
+              balance: -(bal?.current || 0), // credit card balance is what you owe
+              currency: bal?.currency || "GBP",
+              type: "Credit Card",
               source: "truelayer",
-              accountName: acc.display_name || acc.provider?.display_name || "Bank",
             });
-          });
-        } catch {
-          // skip failed account
+          } catch { allAccounts.push({ ...card, balance: 0, type: "Credit Card", source: "truelayer" }); }
+          try {
+            const txRes = await fetchCardTransactions(token, card.account_id);
+            (txRes.results || []).forEach((tx) => allTxns.push(mapTx(tx, card.display_name)));
+          } catch { /* skip */ }
+        }
+      } catch (err) {
+        if (err.message?.includes("401")) {
+          setTlTokens((prev) => { const updated = prev.filter((t) => t !== token); localStorage.setItem("tl_tokens", JSON.stringify(updated)); return updated; });
         }
       }
-      setTlTransactions(allTxns);
-    } catch (err) {
-      setBankError(err.message);
-      if (err.message?.includes("401") || err.message?.includes("unauthorized")) {
-        localStorage.removeItem("tl_token");
-        setTlToken(null);
-      }
-    } finally {
-      setBankLoading(false);
     }
-  }, [tlToken]);
+
+    setTlAccounts(allAccounts);
+    setTlTransactions(allTxns);
+    setBankLoading(false);
+  }, [tlTokens]);
 
   useEffect(() => {
     loadBankData();
   }, [loadBankData]);
 
   const disconnectBank = () => {
-    localStorage.removeItem("tl_token");
-    setTlToken(null);
+    localStorage.removeItem("tl_tokens");
+    setTlTokens([]);
     setTlAccounts([]);
     setTlTransactions([]);
   };
@@ -346,14 +384,14 @@ export default function Dashboard() {
   // Merge TrueLayer accounts with hardcoded ones
   const bankAccounts = tlAccounts.map((acc) => ({
     name: acc.display_name || acc.provider?.display_name || "Bank Account",
-    type: "Bank",
+    type: acc.type || "Bank",
     balance: acc.balance,
     change: null,
     currency: acc.currency || "GBP",
     source: "truelayer",
   }));
 
-  // If we have real bank accounts, replace the hardcoded bank entries
+  // Replace hardcoded Bank entries with live ones; keep investments
   const mergedAccounts = tlAccounts.length > 0
     ? [...ACCOUNTS.filter((a) => a.type !== "Bank"), ...bankAccounts]
     : ACCOUNTS;
@@ -467,7 +505,7 @@ export default function Dashboard() {
           <div style={sectionLabel}>ACCOUNTS</div>
 
           {/* TrueLayer Connect / Status */}
-          {!tlToken ? (
+          {tlTokens.length === 0 ? (
             <button onClick={startBankConnect}
               style={{ width: "100%", padding: "14px 16px", marginBottom: 12, background: "linear-gradient(135deg, #6366f1 0%, #818cf8 100%)", border: "none", borderRadius: 12, color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
               <span style={{ fontSize: 18 }}>🏦</span> Connect Your Bank
@@ -478,7 +516,7 @@ export default function Dashboard() {
                 <span style={{ fontSize: 16 }}>🏦</span>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500, color: "#818cf8" }}>Bank Connected</div>
-                  <div style={{ fontSize: 11, color: "#71717a" }}>{tlAccounts.length} account{tlAccounts.length !== 1 ? "s" : ""} linked</div>
+                  <div style={{ fontSize: 11, color: "#71717a" }}>{tlTokens.length} bank{tlTokens.length !== 1 ? "s" : ""} · {tlAccounts.length} account{tlAccounts.length !== 1 ? "s" : ""} linked</div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -816,7 +854,7 @@ export default function Dashboard() {
 
       {editingTx !== null && <CategoryPicker onSelect={(catId) => handleCategoryChange(editingTx, catId)} onClose={() => setEditingTx(null)} />}
       <div style={{ textAlign: "center", padding: "30px 20px 10px", fontSize: 11, color: "#3f3f46" }}>
-        {tlToken ? "Live data via TrueLayer" : "Dummy data"} {"\u00B7"} Prototype v0.4
+        {tlTokens.length > 0 ? "Live data via TrueLayer" : "Dummy data"} {"\u00B7"} Prototype v0.5
       </div>
     </div>
   );
