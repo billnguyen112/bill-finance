@@ -1002,15 +1002,20 @@ export default function Dashboard() {
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
   const committedCatIds = ["housing", "bills", "subscriptions"];
-  // Committed = recurring items in committed categories ONLY (housing, bills, subs)
-  const committedSpend = recurring
-    .filter(r => committedCatIds.includes(r.categoryId))
-    .reduce((s, r) => s + r.amount, 0);
+  // Committed = ACTUAL spending in committed categories (matches overview)
+  const committedSpend = Object.entries(categorySpending)
+    .filter(([catId]) => committedCatIds.includes(catId))
+    .reduce((s, [, data]) => s + data.total, 0);
+  // Variable = ACTUAL spending in non-committed categories
   const variableSpend = Object.entries(categorySpending)
     .filter(([catId]) => !committedCatIds.includes(catId))
     .reduce((s, [, data]) => s + data.total, 0);
-  // Total budget available for variable spending
-  const variableBudget = totalBudget - committedSpend;
+  // Note: variableSpend + committedSpend === spending (always)
+  // Budget for variable = total budget minus committed category budgets
+  const committedBudgetAmount = budgetedCats
+    .filter(c => committedCatIds.includes(c.id))
+    .reduce((s, c) => s + getBudget(c.id), 0);
+  const variableBudget = totalBudget - committedBudgetAmount;
 
   // Days calculation
   const daysInPeriod = useMemo(() => Math.ceil((budgetEnd - budgetCutoff) / 86400000), [budgetCutoff, budgetEnd]);
