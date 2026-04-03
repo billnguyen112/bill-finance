@@ -1485,6 +1485,43 @@ export default function Dashboard() {
             })}
           </div>
 
+          {/* Not in budget — spending in categories without a budget */}
+          {(() => {
+            const unbudgeted = CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id) && getBudget(c.id) === 0 && (categorySpending[c.id]?.total || 0) > 0);
+            const unbudgetedTotal = unbudgeted.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
+            if (unbudgeted.length === 0) return null;
+            return (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, marginBottom: 12 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "#fbbf24" }}>Not in budget</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#fbbf24" }}>{"\u00A3"}{fmt(unbudgetedTotal)}</span>
+                </div>
+                <div style={{ background: "rgba(251,191,36,0.04)", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(251,191,36,0.1)", marginBottom: 4 }}>
+                  {unbudgeted.map((cat, i) => {
+                    const spent = categorySpending[cat.id]?.total || 0;
+                    return (
+                      <div key={cat.id}
+                        onClick={() => { setDrillCategory(cat.id); setDrillSource("budget"); }}
+                        style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: i < unbudgeted.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", cursor: "pointer" }}>
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <CategorySvg id={cat.id} color={cat.color} size={18} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 500 }}>{cat.label}</div>
+                          <div style={{ fontSize: 12, color: "#71717a", marginTop: 2 }}>{categorySpending[cat.id]?.count || 0} transaction{(categorySpending[cat.id]?.count || 0) !== 1 ? "s" : ""} {"\u00B7"} tap to review</div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{fmt(spent)}</span>
+                          <span style={{ color: "#3f3f46", fontSize: 14 }}>{"\u203A"}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+
           {/* Recurring */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 28, marginBottom: 12 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "#818cf8" }}>Recurring</span>
