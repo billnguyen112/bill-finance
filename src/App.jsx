@@ -463,23 +463,27 @@ function getMerchantLogo(merchantName, rawMerchant) {
   if (!merchantName && !rawMerchant) return null;
   const combinedText = `${merchantName || ""} ${rawMerchant || ""}`;
 
-  // 1. Try regex rules against combined text → use Google favicons (always reliable, never blank)
+  // Try regex rules against combined text
   for (const rule of MERCHANT_LOGO_RULES) {
     if (rule.p.test(combinedText)) {
-      const url = `https://www.google.com/s2/favicons?domain=${rule.d}&sz=128`;
+      // icon.horse returns full-size logos (better for full-bleed circles)
+      const url = `https://icon.horse/icon/${rule.d}`;
       if (!brokenLogos.has(url)) return url;
+      // Fallback to Google favicon if icon.horse failed for this domain
+      const gUrl = `https://www.google.com/s2/favicons?domain=${rule.d}&sz=128`;
+      if (!brokenLogos.has(gUrl)) return gUrl;
     }
   }
 
-  // 2. Try to extract domain from raw text (e.g., "APPLE.COM/BILL" → apple.com)
+  // Try to extract domain from raw text (e.g., "APPLE.COM/BILL" → apple.com)
   const raw = (rawMerchant || merchantName || "").toLowerCase();
   const domainMatch = raw.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
   if (domainMatch) {
-    const url = `https://www.google.com/s2/favicons?domain=${domainMatch[1]}&sz=128`;
+    const url = `https://icon.horse/icon/${domainMatch[1]}`;
     if (!brokenLogos.has(url)) return url;
   }
 
-  return null; // No guessing — show clean letter fallback instead of broken icon
+  return null;
 }
 
 // Deterministic color from string — consistent per merchant
@@ -494,42 +498,34 @@ function merchantColor(name) {
   return LETTER_COLORS[Math.abs(hash) % LETTER_COLORS.length];
 }
 
-// Logo component — consumer-grade with proper fallback
+// Logo component — full-bleed logo filling the circle, letter fallback
 function MerchantIcon({ merchant, rawMerchant, categoryId, size = 44 }) {
   const [imgState, setImgState] = useState("loading"); // loading | loaded | failed
   const logoUrl = useMemo(() => getMerchantLogo(merchant, rawMerchant), [merchant, rawMerchant]);
 
   const initial = (merchant || "?").replace(/^[^a-zA-Z]*/, "").charAt(0).toUpperCase() || "?";
   const bgColor = merchantColor(merchant);
-  const iconSize = Math.round(size * 0.6); // favicon renders at 60% of circle
 
-  // Always render the letter fallback as base, overlay logo on top when loaded
   return (
     <div style={{
       width: size, height: size, borderRadius: size / 2, flexShrink: 0,
-      background: imgState === "loaded" ? "#fff" : bgColor,
+      background: imgState === "loaded" ? "transparent" : bgColor,
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: size * 0.42, fontWeight: 700, color: "#fff",
       position: "relative", overflow: "hidden",
-      transition: "background 0.2s ease",
-      border: imgState === "loaded" ? "1px solid rgba(255,255,255,0.08)" : "none",
-      boxSizing: "border-box",
     }}>
-      {/* Letter always visible as base */}
       {imgState !== "loaded" && initial}
-      {/* Logo overlays on top when available — centered with padding like Revolut */}
       {logoUrl && imgState !== "failed" && (
         <img
           src={logoUrl}
           alt=""
-          width={iconSize}
-          height={iconSize}
+          width={size}
+          height={size}
           style={{
-            position: "absolute",
-            top: "50%", left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: iconSize, height: iconSize,
-            objectFit: "contain", display: "block",
+            position: "absolute", inset: 0,
+            width: size, height: size,
+            objectFit: "cover", display: "block",
+            borderRadius: size / 2,
             opacity: imgState === "loaded" ? 1 : 0,
             transition: "opacity 0.2s ease",
           }}
