@@ -1,19 +1,21 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 
 // ── Data ──────────────────────────────────────────────
-const ACCOUNTS = [
-  { name: "IBKR ISA", type: "Brokerage", balance: 7712.68, change: -0.5, currency: "USD" },
+// Static accounts (no API)
+const STATIC_ACCOUNTS = [
   { name: "Kraken", type: "Crypto", balance: 0, change: 0, currency: "GBP" },
   { name: "Republic", type: "Private Equity", balance: 1500, change: null, currency: "USD" },
 ];
 
-const HOLDINGS = [
-  { ticker: "SIVE", name: "Sivers Semiconductors", value: 758, costBasis: 950, pnl: -20.2, account: "IBKR", sparkline: [12, 11, 10, 10, 11, 10, 10, 10] },
-  { ticker: "META", name: "Meta Platforms", value: 2030, costBasis: 2670, pnl: -24.0, account: "IBKR", sparkline: [560, 550, 540, 535, 530, 534, 533, 534] },
-  { ticker: "SOI", name: "S.O.I.T.E.C.", value: 1100, costBasis: 1295, pnl: -15.1, account: "IBKR", sparkline: [55, 54, 53, 52, 52, 51, 52, 52] },
-  { ticker: "LNSR", name: "Lensar Inc", value: 891, costBasis: 1168, pnl: -23.7, account: "IBKR", sparkline: [7, 6.5, 6.2, 6, 5.9, 5.8, 5.8, 5.84] },
-  { ticker: "TSEM", name: "Tower Semiconductor", value: 601, costBasis: 793, pnl: -24.2, account: "IBKR", sparkline: [165, 162, 160, 158, 159, 158, 158, 158] },
-];
+// IBKR stock name map (conid → display name)
+const IBKR_NAMES = {
+  "TSEM": "Tower Semiconductor",
+  "SIVE": "Sivers Semiconductors",
+  "META": "Meta Platforms",
+  "SOI": "S.O.I.T.E.C.",
+  "LNSR": "Lensar Inc",
+  "IQE": "IQE plc",
+};
 
 const CATEGORIES = [
   { id: "family", label: "Family", icon: "\u{1F468}\u200D\u{1F469}\u200D\u{1F466}", color: "#34d399", budget: 245 },
@@ -773,8 +775,69 @@ export default function Dashboard() {
   const [txCategoryFilter, setTxCategoryFilter] = useState(null);
   const [customMonth, setCustomMonth] = useState(new Date().getMonth());
   const [customYear, setCustomYear] = useState(new Date().getFullYear());
-  const [selectedTx, setSelectedTx] = useState(null); // transaction detail sheet
+  const [selectedTx, setSelectedTx] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // IBKR state
+  const [ibkrConnected, setIbkrConnected] = useState(false);
+  const [ibkrAccounts, setIbkrAccounts] = useState([]);
+  const [ibkrPositions, setIbkrPositions] = useState([]);
+  const [ibkrSummary, setIbkrSummary] = useState(null);
+
+  // IBKR: check connection and load data
+  const loadIbkrData = useCallback(async () => {
+    try {
+      const statusRes = await fetch("/api/ibkr/status");
+      const status = await statusRes.json();
+      if (!status.authenticated) { setIbkrConnected(false); return; }
+      setIbkrConnected(true);
+
+      // Get accounts
+      const accRes = await fetch("/api/ibkr/accounts");
+      const accounts = await accRes.json();
+      if (!Array.isArray(accounts)) return;
+      setIbkrAccounts(accounts);
+
+      // Get positions + summary for each account
+      const allPositions = [];
+      let totalNav = 0;
+      let totalCash = 0;
+      for (const acc of accounts) {
+        try {
+          const posRes = await fetch(`/api/ibkr/account/${acc.accountId}/positions`);
+          const positions = await posRes.json();
+          if (Array.isArray(positions)) {
+            positions.filter(p => p.position !== 0).forEach(p => allPositions.push({ ...p, accountAlias: acc.accountAlias || acc.type }));
+          }
+        } catch {}
+        try {
+          const sumRes = await fetch(`/api/ibkr/account/${acc.accountId}/summary`);
+          const summary = await sumRes.json();
+          if (summary.netliquidation) {
+            totalNav += summary.netliquidation.amount || 0;
+            totalCash += (summary.totalcashvalue?.amount || 0);
+          }
+          if (!ibkrSummary) setIbkrSummary(summary);
+        } catch {}
+      }
+      setIbkrPositions(allPositions);
+      console.log(`[IBKR] ${accounts.length} accounts, ${allPositions.length} positions, NAV: £${totalNav.toFixed(2)}`);
+    } catch (err) {
+      console.warn("[IBKR] Not available:", err.message);
+      setIbkrConnected(false);
+    }
+  }, []);
+
+  useEffect(() => { loadIbkrData(); }, [loadIbkrData]);
+
+  // IBKR keepalive — tickle every 4 min
+  useEffect(() => {
+    if (!ibkrConnected) return;
+    const interval = setInterval(() => {
+      fetch("/api/ibkr/tickle", { method: "POST" }).catch(() => {});
+    }, 4 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [ibkrConnected]);
 
   // Handle OAuth callback
   useEffect(() => {
@@ -934,9 +997,32 @@ export default function Dashboard() {
     provider: acc.provider?.display_name || acc.provider?.provider_id || "",
   }));
 
-  const mergedAccounts = tlAccounts.length > 0
-    ? [...ACCOUNTS.filter((a) => a.type !== "Bank"), ...bankAccounts]
-    : ACCOUNTS;
+  // Build IBKR account entries from live data
+  const ibkrAccountEntries = useMemo(() => {
+    if (!ibkrConnected || ibkrAccounts.length === 0) {
+      return [{ name: "IBKR ISA", type: "Brokerage", balance: 7712.68, change: null, currency: "USD", provider: "IBKR" }];
+    }
+    return ibkrAccounts.map(acc => {
+      // Calculate NAV from positions for this account
+      const accPositions = ibkrPositions.filter(p => p.acctId === acc.accountId && p.position !== 0);
+      const posValue = accPositions.reduce((s, p) => s + (p.mktValue || 0), 0);
+      return {
+        name: acc.accountAlias || acc.type || acc.accountId,
+        type: acc.type === "ISA" ? "ISA" : "Brokerage",
+        balance: ibkrSummary?.netliquidation?.amount || posValue,
+        change: null,
+        currency: acc.currency || "GBP",
+        source: "ibkr",
+        provider: "Interactive Brokers",
+      };
+    });
+  }, [ibkrConnected, ibkrAccounts, ibkrPositions, ibkrSummary]);
+
+  const mergedAccounts = [
+    ...ibkrAccountEntries,
+    ...STATIC_ACCOUNTS,
+    ...bankAccounts,
+  ];
 
   // Transactions — use live when connected, apply overrides
   const allTransactions = useMemo(() => {
@@ -1056,18 +1142,40 @@ export default function Dashboard() {
   };
 
   // Holdings
-  const totalCurrentValue = HOLDINGS.reduce((s, h) => s + h.value, 0);
-  const totalCostBasis = HOLDINGS.reduce((s, h) => s + h.costBasis, 0);
+  // Holdings from IBKR live positions
+  const holdings = useMemo(() => {
+    if (ibkrPositions.length === 0) return [];
+    return ibkrPositions.map(p => {
+      const costBasis = p.avgCost * p.position;
+      const pnlPct = costBasis > 0 ? ((p.mktValue - costBasis) / costBasis * 100) : 0;
+      return {
+        ticker: p.contractDesc,
+        name: IBKR_NAMES[p.contractDesc] || p.contractDesc,
+        value: p.mktValue,
+        costBasis,
+        pnl: pnlPct,
+        unrealizedPnl: p.unrealizedPnl,
+        currency: p.currency,
+        position: p.position,
+        mktPrice: p.mktPrice,
+        avgCost: p.avgCost,
+        account: p.accountAlias || "IBKR",
+      };
+    });
+  }, [ibkrPositions]);
+
+  const totalCurrentValue = holdings.reduce((s, h) => s + h.value, 0);
+  const totalCostBasis = holdings.reduce((s, h) => s + h.costBasis, 0);
   const totalPnlAbs = totalCurrentValue - totalCostBasis;
   const totalPnlPct = totalCostBasis > 0 ? ((totalPnlAbs / totalCostBasis) * 100) : 0;
   const sortedHoldings = useMemo(() => {
-    return [...HOLDINGS].sort((a, b) => {
-      if (holdingsSort === "pnl_abs") return (b.value - b.costBasis) - (a.value - a.costBasis);
+    return [...holdings].sort((a, b) => {
+      if (holdingsSort === "pnl_abs") return (b.unrealizedPnl || 0) - (a.unrealizedPnl || 0);
       if (holdingsSort === "pnl_pct") return b.pnl - a.pnl;
       if (holdingsSort === "value") return b.value - a.value;
       return 0;
     });
-  }, [holdingsSort]);
+  }, [holdings, holdingsSort]);
 
   const handleCategoryChange = (txId, newCatId) => {
     if (String(txId).startsWith("tl_")) {
@@ -1256,7 +1364,7 @@ export default function Dashboard() {
             <div style={{ display: "flex", gap: 16, marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
               <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Cost Basis</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{"\u00A3"}{totalCostBasis.toLocaleString("en-GB")}</div></div>
               <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Return</div><div style={{ fontSize: 14, fontWeight: 600, color: totalPnlPct >= 0 ? "#34d399" : "#ef4444", marginTop: 2 }}>{totalPnlPct >= 0 ? "+" : ""}{totalPnlPct.toFixed(1)}%</div></div>
-              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Positions</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{HOLDINGS.length}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Positions</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{holdings.length}</div></div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
@@ -1270,8 +1378,15 @@ export default function Dashboard() {
             ))}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {sortedHoldings.length === 0 && (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#3f3f46" }}>
+                <div style={{ fontSize: 14, fontWeight: 500, color: "#71717a" }}>{ibkrConnected ? "No open positions" : "IBKR not connected"}</div>
+                {!ibkrConnected && <div style={{ fontSize: 12, marginTop: 4 }}>Log in at https://localhost:5000</div>}
+              </div>
+            )}
             {sortedHoldings.map((h) => {
-              const pnlAbs = h.value - h.costBasis;
+              const pnlAbs = h.unrealizedPnl || (h.value - h.costBasis);
+              const sym = { USD: "$", GBP: "\u00A3", EUR: "\u20AC", SEK: "kr" }[h.currency] || h.currency + " ";
               return (
                 <div key={h.ticker} style={{ ...card }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1281,18 +1396,18 @@ export default function Dashboard() {
                           <span style={{ fontSize: 11, fontWeight: 700, color: "#818cf8", background: "rgba(99,102,241,0.12)", padding: "2px 7px", borderRadius: 5 }}>{h.ticker}</span>
                           <span style={{ fontSize: 13, color: "#a1a1aa" }}>{h.name}</span>
                         </div>
-                        <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 3 }}>{h.account === "T212" ? "Trading 212" : h.account}</div>
+                        <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 3 }}>{h.account} {"\u00B7"} {h.position} shares {"\u00B7"} {h.currency}</div>
                       </div>
                     </div>
-                    <Sparkline data={h.sparkline} width={56} height={22} />
+                    {ibkrConnected && <span style={{ fontSize: 9, padding: "2px 6px", background: "rgba(52,211,153,0.12)", color: "#34d399", borderRadius: 4, fontWeight: 600 }}>LIVE</span>}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Value</div><div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{h.value.toLocaleString()}</div></div>
-                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Cost</div><div style={{ fontSize: 13, fontWeight: 500, color: "#71717a" }}>{"\u00A3"}{h.costBasis.toLocaleString()}</div></div>
+                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Value</div><div style={{ fontSize: 13, fontWeight: 600 }}>{sym}{h.value.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div></div>
+                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Avg Cost</div><div style={{ fontSize: 13, fontWeight: 500, color: "#71717a" }}>{sym}{h.avgCost?.toFixed(2) || "?"}</div></div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 10, color: "#3f3f46" }}>P&L</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: pnlAbs >= 0 ? "#34d399" : "#ef4444" }}>
-                        {pnlAbs >= 0 ? "+" : ""}{"\u00A3"}{pnlAbs.toFixed(0)} ({h.pnl >= 0 ? "+" : ""}{h.pnl}%)
+                        {pnlAbs >= 0 ? "+" : ""}{sym}{Math.abs(pnlAbs).toFixed(2)} ({h.pnl >= 0 ? "+" : ""}{h.pnl.toFixed(1)}%)
                       </div>
                     </div>
                   </div>
