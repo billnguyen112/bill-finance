@@ -873,14 +873,38 @@ export default function Dashboard() {
       });
     }
 
-    allTxns.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    // Deduplicate transactions by transaction_id (same bank connected via multiple tokens)
+    const seen = new Set();
+    const deduped = [];
+    for (const tx of allTxns) {
+      if (!seen.has(tx.id)) {
+        seen.add(tx.id);
+        deduped.push(tx);
+      }
+    }
+    if (deduped.length < allTxns.length) {
+      console.log(`[DEDUP] Removed ${allTxns.length - deduped.length} duplicate transactions`);
+    }
+    const finalTxns = deduped;
+    finalTxns.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     if (allAccounts.length === 0 && tlTokens.length > 0) {
       setBankError("Bank connections expired. Disconnect and reconnect your banks.");
     }
 
-    setTlAccounts(allAccounts);
-    setTlTransactions(allTxns);
+    // Deduplicate accounts too (same bank via multiple tokens)
+    const seenAccounts = new Set();
+    const dedupedAccounts = [];
+    for (const acc of allAccounts) {
+      const key = acc.account_id || acc.display_name;
+      if (!seenAccounts.has(key)) {
+        seenAccounts.add(key);
+        dedupedAccounts.push(acc);
+      }
+    }
+
+    setTlAccounts(dedupedAccounts);
+    setTlTransactions(finalTxns);
     setBankLoading(false);
   }, [tlTokens]);
 
@@ -949,7 +973,15 @@ export default function Dashboard() {
   }, [allTransactions, budgetCutoff]);
 
   const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
-  const spending = useMemo(() => periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [periodTransactions]);
+  const spending = useMemo(() => {
+    const s = periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
+    const total = s.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+    // Debug breakdown by category
+    const cats = {};
+    s.forEach(t => { cats[t.categoryId] = (cats[t.categoryId] || 0) + Math.abs(t.amount); });
+    console.log(`[SPENDING] £${total.toFixed(2)} from ${s.length} txns | ` + Object.entries(cats).sort((a,b) => b[1]-a[1]).map(([k,v]) => `${k}: £${v.toFixed(2)}`).join(", "));
+    return total;
+  }, [periodTransactions]);
   const netFlow = income - spending;
   const savingsRate = income > 0 ? Math.max(Math.min(Math.round(((income - spending) / income) * 100), 100), -100) : 0;
 
