@@ -593,7 +593,7 @@ const SPENDING_RULES = [
   // Housing — very specific
   { pattern: /rent|mortgage|rightmove|openrent|letting|housing\s*benefit/i, categoryId: "housing" },
   // Eating out
-  { pattern: /pret|starbucks|costa|mcdonald|burger|nando|wagamama|pizza|kebab|sushi|cafe|coffee|restaurant|dining|deliveroo|uber\s*eats|just\s*eat|dine|grill|kitchen|bistro|brasserie|bar\s|pub\s|salad|greggs|subway|kfc|domino|five\s*guys|leon\b|itsu|wasabi|eat\b|food\s*hall|canteen|marugame|dishoom|chipotle|shake\s*shack|wingstop|popeyes|tortilla|gail|joe\s.*juice|caffe\s*nero|yo\s*sushi|honest\b|pizza\s*(express|hut)|frankie|noodle|ramen|curry|thai|chinese\s*take|indian\s*take|fish\s*&?\s*chip|owl\s*and\s*hitchhiker|bleecker|yard\s*sale|patara|terrys\s*cafe|haidilao|junk\s*soho|keu\s*soho|dhc\s*shaftesbury|italia\s*uno|cafe\s*forum|gerrard|golden\s*0207|simmons\s*bar|lanzhou/i, categoryId: "eating_out" },
+  { pattern: /pret|starbucks|costa|mcdonald|burger|nando|wagamama|pizza|kebab|sushi|cafe|coffee|restaurant|dining|deliveroo|uber\s*eats|just\s*eat|dine|grill|kitchen|bistro|brasserie|bar\s|pub\s|salad|greggs|subway|kfc|domino|five\s*guys|leon\b|itsu|wasabi|eat\b|food\s*hall|canteen|marugame|dishoom|chipotle|shake\s*shack|wingstop|popeyes|tortilla|gail|joe\s.*juice|caffe\s*nero|yo\s*sushi|honest\b|pizza\s*(express|hut)|frankie|noodle|ramen|curry|thai|chinese\s*take|indian\s*take|fish\s*&?\s*chip|owl\s*and\s*hitchhiker|bleecker|yard\s*sale|patara|terrys\s*cafe|haidilao|junk\s*soho|keu\s*soho|dhc\s*shaftesbury|italia\s*uno|cafe\s*forum|gerrard|golden\s*0207|simmons\s*bar|lanzhou|regal\s*gaming/i, categoryId: "eating_out" },
   // Groceries
   { pattern: /tesco|sainsbury|asda|aldi|lidl|waitrose|morrisons|co-?op\s*(food|store)|ocado|marks.*spencer|m&s\b|grocery|supermarket|iceland\s*(food|store)|whole\s*foods|budgens|city\s*supermarket/i, categoryId: "groceries" },
   // Transport
@@ -601,7 +601,7 @@ const SPENDING_RULES = [
   // Shopping
   { pattern: /amazon|ebay|asos|zara|h&m|primark|nike|adidas|uniqlo|john\s*lewis|argos|currys|ikea|apple\.(com|store)|google\s*store|samsung|boots|superdrug|tk\s*maxx|next\s|river\s*island|new\s*look|topshop|selfridges|harrods|liberty/i, categoryId: "shopping" },
   // Entertainment
-  { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s*(tv|go)|now\s*tv|theatre|concert|ticket|gig\s|event|bowling|laser|escape\s*room|allstarlanes|neon\s*194|regal\s*(gaming|leisure)/i, categoryId: "entertainment" },
+  { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s*(tv|go)|now\s*tv|theatre|concert|ticket|gig\s|event|bowling|laser|escape\s*room|allstarlanes|neon\s*194/i, categoryId: "entertainment" },
   // Subscriptions
   { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|cruxcapital|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium|chatgpt|claude|openai|anthropic|github|dropbox|1password|lastpass|nordvpn|express\s*vpn|type-?f\s*capital|futnext/i, categoryId: "subscriptions" },
   // Bills — only match specific utility/telecoms, NOT bank names
