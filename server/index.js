@@ -166,8 +166,96 @@ app.get('/api/accounts/:id/balance', async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// ── IBKR Client Portal Gateway Proxy ────────────────
+// Gateway runs on https://localhost:5000 with self-signed cert
+const IBKR_BASE = 'https://localhost:5000/v1/api'
+
+// Allow self-signed certs for IBKR gateway
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+
+async function ibkrFetch(path, method = 'GET') {
+  const url = `${IBKR_BASE}${path}`
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  })
+  return res.json()
+}
+
+// Check if IBKR gateway is authenticated
+app.get('/api/ibkr/status', async (req, res) => {
+  try {
+    const data = await ibkrFetch('/iserver/auth/status')
+    res.json(data)
+  } catch (err) {
+    res.json({ authenticated: false, error: err.message })
+  }
+})
+
+// Keep session alive (call every 5 min)
+app.post('/api/ibkr/tickle', async (req, res) => {
+  try {
+    const data = await ibkrFetch('/tickle')
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get portfolio accounts
+app.get('/api/ibkr/accounts', async (req, res) => {
+  try {
+    const data = await ibkrFetch('/portfolio/accounts')
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get account summary (balance, NAV, margin)
+app.get('/api/ibkr/account/:id/summary', async (req, res) => {
+  try {
+    const data = await ibkrFetch(`/portfolio/${req.params.id}/summary`)
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get account ledger (cash balances by currency)
+app.get('/api/ibkr/account/:id/ledger', async (req, res) => {
+  try {
+    const data = await ibkrFetch(`/portfolio/${req.params.id}/ledger`)
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get positions with P&L
+app.get('/api/ibkr/account/:id/positions', async (req, res) => {
+  try {
+    const page = req.query.page || 0
+    const data = await ibkrFetch(`/portfolio/${req.params.id}/positions/${page}`)
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Get P&L for account
+app.get('/api/ibkr/pnl', async (req, res) => {
+  try {
+    const data = await ibkrFetch('/iserver/account/pnl/partitioned')
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
   console.log(`Token auto-refresh enabled (refresh tokens last ~90 days)`)
+  console.log(`IBKR Gateway proxy: ${IBKR_BASE}`)
 })
