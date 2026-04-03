@@ -966,9 +966,7 @@ export default function Dashboard() {
   const getBudget = (catId) => budgetOverrides[catId] ?? CATEGORIES.find((c) => c.id === catId)?.budget ?? 0;
   const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
-  // totalSpend = ALL spending in period (not just budgeted categories)
-  const totalSpend = spending; // reuse the 'spending' variable computed above from periodTransactions
-  const budgetedSpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
+  const totalSpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
   const committedCatIds = ["housing", "bills", "subscriptions", "family"];
   const committedSpend = budgetedCats.filter((c) => committedCatIds.includes(c.id)).reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
@@ -1315,17 +1313,6 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Refresh bar */}
-          {tlTokens.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-              <button onClick={handleRefresh} disabled={refreshing}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: "rgba(255,255,255,0.04)", border: "none", borderRadius: 20, cursor: "pointer", color: refreshing ? "#52525b" : "#71717a", fontSize: 13, fontWeight: 500 }}>
-                <span style={{ display: "inline-block", transition: "transform 0.3s", transform: refreshing ? "rotate(360deg)" : "none" }}>{"\u21BB"}</span>
-                {refreshing ? "Refreshing..." : "Pull to refresh"}
-              </button>
-            </div>
-          )}
-
           {/* Transaction groups — Revolut style */}
           {dateKeys.map((date) => {
             const group = groups[date];
@@ -1388,96 +1375,150 @@ export default function Dashboard() {
       {activeTab === "budget" && (
         <div style={{ padding: "0 20px" }}>
           {/* Period badge */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", margin: "20px 0 16px" }}>
-            <div style={{ padding: "7px 18px", background: "rgba(99,102,241,0.1)", borderRadius: 20, fontSize: 13, color: "#818cf8", fontWeight: 500 }}>
+          <div style={{ padding: "20px 0 12px" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "rgba(99,102,241,0.1)", borderRadius: 20, fontSize: 13, color: "#818cf8", fontWeight: 500 }}>
               {budgetPeriodLabel}
             </div>
           </div>
 
-          {/* Donut chart with multi-segment */}
-          <div style={{ ...card, padding: "24px 16px", marginBottom: 14, textAlign: "center" }}>
+          {/* Donut chart */}
+          <div style={{ ...card, padding: "28px 16px 20px", marginBottom: 14, textAlign: "center" }}>
             <DonutChart
               segments={[
-                ...budgetedCats.filter(c => categorySpending[c.id]?.total > 0).map(c => ({
-                  value: categorySpending[c.id]?.total || 0,
-                  color: c.color,
-                })),
+                { value: variableSpend, color: "#818cf8" },
+                { value: committedSpend, color: "#c084fc" },
                 ...(totalBudget > totalSpend ? [{ value: totalBudget - totalSpend, color: "rgba(255,255,255,0.04)" }] : []),
               ]}
               centerAmount={totalSpend > totalBudget
                 ? `\u00A3${fmt(totalSpend - totalBudget)}`
                 : `\u00A3${fmt(totalBudget - totalSpend)}`
               }
-              centerLabel={totalSpend > totalBudget ? "over budget" : `left of \u00A3${totalBudget.toFixed(0)}`}
+              centerLabel={totalSpend > totalBudget ? "over budget" : `left of \u00A3${totalBudget.toLocaleString("en-GB")}`}
               size={200}
             />
-
-            {/* Legend */}
-            <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 24, padding: "0 8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#818cf8" }} />
-                <div style={{ fontSize: 12, color: "#a1a1aa" }}>Spent {"\u00A3"}{fmt(variableSpend)}</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Spending</div>
+                  <div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{fmt(variableSpend)}</div>
+                </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#c084fc" }} />
-                <div style={{ fontSize: 12, color: "#a1a1aa" }}>Committed {"\u00A3"}{fmt(committedSpend)}</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Committed</div>
+                  <div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{fmt(committedSpend)}</div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Daily allowance + pace */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-            <div style={{ ...card, flex: 1, padding: "16px 14px", textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "#71717a", marginBottom: 6 }}>Daily Budget</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: dailyAllowance > 15 ? "#34d399" : dailyAllowance > 0 ? "#fbbf24" : "#ef4444" }}>
-                {"\u00A3"}{dailyAllowance.toFixed(2)}
-              </div>
-              <div style={{ fontSize: 11, color: "#52525b", marginTop: 4 }}>{daysLeft} days left</div>
+          {/* Daily allowance — Emma style */}
+          <div style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px", marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>Daily allowance</div>
+              <div style={{ fontSize: 12, color: "#71717a", marginTop: 2 }}>Until {budgetEnd.toLocaleDateString("en-GB", { day: "numeric", month: "long" })} {"\u00B7"} {daysLeft} days</div>
             </div>
-            <div style={{ ...card, flex: 1, padding: "16px 14px", textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: "#71717a", marginBottom: 6 }}>Spending Pace</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: spendingPace <= totalBudget ? "#34d399" : "#ef4444" }}>
-                {spendingPace <= totalBudget ? "On Track" : "Over"}
-              </div>
-              <div style={{ fontSize: 11, color: "#52525b", marginTop: 4 }}>
-                {dayOfPeriod > 0 ? `\u00A3${(totalSpend / dayOfPeriod).toFixed(0)}/day avg` : ""}
-              </div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: dailyAllowance > 15 ? "#34d399" : dailyAllowance > 0 ? "#fbbf24" : "#ef4444" }}>
+              {"\u00A3"}{dailyAllowance.toFixed(2)}
             </div>
+          </div>
+
+          {/* Category budgets — Emma style */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#818cf8" }}>Category budgets</span>
+            <button onClick={() => setEditingBudget(editingBudget === "all" ? null : "all")}
+              style={{ background: "none", border: "none", color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+              {editingBudget === "all" ? "Done" : "Edit \u203A"}
+            </button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id))
+              .sort((a, b) => (categorySpending[b.id]?.total || 0) - (categorySpending[a.id]?.total || 0))
+              .map((cat) => {
+              const budget = getBudget(cat.id);
+              const spent = categorySpending[cat.id]?.total || 0;
+              const isOver = budget > 0 && spent > budget;
+              const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+              if (!editingBudget && budget === 0 && spent === 0) return null;
+              return (
+                <div key={cat.id}
+                  onClick={() => !editingBudget && spent > 0 && (() => { setDrillCategory(cat.id); setDrillSource("budget"); })()}
+                  style={{ padding: "16px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: spent > 0 && !editingBudget ? "pointer" : "default" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <CategorySvg id={cat.id} color={cat.color} size={20} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: 15, fontWeight: 600 }}>{cat.label}</span>
+                        {editingBudget === "all" ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 13, color: "#52525b" }}>{"\u00A3"}</span>
+                            <input type="number" defaultValue={budget} onBlur={(e) => saveBudget(cat.id, e.target.value)}
+                              style={{ width: 72, padding: "6px 8px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e4e4e7", fontSize: 15, fontWeight: 600, textAlign: "right" }} />
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 15, fontWeight: 600 }}>-{"\u00A3"}{fmt(spent)}</span>
+                        )}
+                      </div>
+                      {budget > 0 && !editingBudget && (
+                        <>
+                          <div style={{ fontSize: 12, color: isOver ? "#ef4444" : "#71717a", marginTop: 4 }}>
+                            {isOver
+                              ? `\u00A3${fmt(spent - budget)} over your budget of \u00A3${fmt(budget)}`
+                              : `\u00A3${fmt(budget - spent)} left of \u00A3${fmt(budget)}`
+                            }
+                          </div>
+                          <div style={{ marginTop: 8, height: 5, background: "rgba(255,255,255,0.04)", borderRadius: 3 }}>
+                            <div style={{ width: `${pct}%`, height: "100%", background: isOver ? "#ef4444" : cat.color, borderRadius: 3, transition: "width 0.4s" }} />
+                          </div>
+                        </>
+                      )}
+                      {budget === 0 && !editingBudget && spent > 0 && (
+                        <div style={{ fontSize: 12, color: "#3f3f46", marginTop: 2 }}>No budget set</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Recurring */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, marginTop: 20 }}>
-            <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>RECURRING</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ color: "#71717a", fontSize: 12, fontWeight: 500 }}>{"\u00A3"}{recurringTotal.toFixed(2)}/mo</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 28, marginBottom: 12 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#818cf8" }}>Recurring</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ color: "#71717a", fontSize: 13 }}>{"\u00A3"}{recurringTotal.toFixed(2)}/mo</span>
               <button onClick={() => setEditingRecurring(editingRecurring === "all" ? null : "all")}
-                style={{ background: "none", border: "none", color: "#818cf8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-                {editingRecurring === "all" ? "Done" : "Edit"}
+                style={{ background: "none", border: "none", color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 600 }}>
+                {editingRecurring === "all" ? "Done" : "Edit \u203A"}
               </button>
             </div>
           </div>
-          <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 14 }}>
+          <div style={{ background: "rgba(255,255,255,0.025)", borderRadius: 16, overflow: "hidden", marginBottom: 14 }}>
             {recurring.map((r, i) => {
               const cat = getCat(r.categoryId);
               return (
-                <div key={r.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < recurring.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                  <MerchantIcon merchant={r.merchant} categoryId={r.categoryId} size={38} />
-                  <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+                <div key={r.id} style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < recurring.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                  <MerchantIcon merchant={r.merchant} categoryId={r.categoryId} size={40} />
+                  <div style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
                     {editingRecurring === "all" ? (
                       <input defaultValue={r.merchant} onBlur={(e) => updateRecurringItem(r.id, "merchant", e.target.value)}
-                        style={{ width: "100%", padding: "2px 4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 4, color: "#e4e4e7", fontSize: 14 }} />
+                        style={{ width: "100%", padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, color: "#e4e4e7", fontSize: 14 }} />
                     ) : (
                       <div style={{ fontSize: 14, fontWeight: 500 }}>{r.merchant}</div>
                     )}
-                    <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 2 }}>{r.frequency}{r.nextDate ? ` \u00B7 ${r.nextDate}` : ""}</div>
+                    <div style={{ fontSize: 12, color: "#52525b", marginTop: 2 }}>{r.frequency}{r.nextDate ? ` \u00B7 ${r.nextDate}` : ""}</div>
                   </div>
                   {editingRecurring === "all" ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <span style={{ fontSize: 12, color: "#52525b" }}>{"\u00A3"}</span>
                       <input type="number" defaultValue={r.amount} onBlur={(e) => updateRecurringItem(r.id, "amount", e.target.value)}
-                        style={{ width: 60, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: "#e4e4e7", fontSize: 13, textAlign: "right" }} />
+                        style={{ width: 64, padding: "6px 8px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e4e4e7", fontSize: 14, textAlign: "right" }} />
                       <button onClick={() => deleteRecurringItem(r.id)}
-                        style={{ background: "none", border: "none", color: "#ef4444", fontSize: 14, cursor: "pointer", padding: "0 2px" }}>{"\u2715"}</button>
+                        style={{ background: "none", border: "none", color: "#ef4444", fontSize: 14, cursor: "pointer", padding: "0 4px" }}>{"\u2715"}</button>
                     </div>
                   ) : (
                     <div style={{ fontSize: 14, fontWeight: 600, color: "#a1a1aa" }}>{"\u00A3"}{r.amount.toFixed(2)}</div>
@@ -1488,74 +1529,10 @@ export default function Dashboard() {
           </div>
           {editingRecurring === "all" && (
             <button onClick={addRecurringItem}
-              style={{ width: "100%", padding: "12px", marginBottom: 14, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.08)", borderRadius: 14, color: "#818cf8", fontSize: 13, cursor: "pointer", fontWeight: 500 }}>
+              style={{ width: "100%", padding: "14px", marginBottom: 14, background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.06)", borderRadius: 14, color: "#818cf8", fontSize: 14, cursor: "pointer", fontWeight: 500 }}>
               + Add recurring item
             </button>
           )}
-
-          {/* Category budgets */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, marginTop: 20 }}>
-            <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>CATEGORY BUDGETS</div>
-            <button onClick={() => setEditingBudget(editingBudget === "all" ? null : "all")}
-              style={{ background: "none", border: "none", color: "#818cf8", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-              {editingBudget === "all" ? "Done" : "Edit"}
-            </button>
-          </div>
-          <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-            {CATEGORIES.filter((c) => !EXCLUDED_FROM_SPENDING.includes(c.id))
-              .sort((a, b) => (categorySpending[b.id]?.total || 0) - (categorySpending[a.id]?.total || 0))
-              .map((cat, i, arr) => {
-              const budget = getBudget(cat.id);
-              const spent = categorySpending[cat.id]?.total || 0;
-              const isOver = budget > 0 && spent > budget;
-              const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-              if (!editingBudget && budget === 0 && spent === 0) return null;
-              return (
-                <div key={cat.id}
-                  onClick={() => !editingBudget && spent > 0 && (() => { setDrillCategory(cat.id); setDrillSource("budget"); })()}
-                  style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: spent > 0 && !editingBudget ? "pointer" : "default" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CategorySvg id={cat.id} color={cat.color} size={18} /></div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: 14, fontWeight: 600 }}>{cat.label}</span>
-                        {editingBudget === "all" ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ fontSize: 12, color: "#52525b" }}>{"\u00A3"}</span>
-                            <input type="number" defaultValue={budget} onBlur={(e) => saveBudget(cat.id, e.target.value)}
-                              style={{ width: 70, padding: "4px 6px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: "#e4e4e7", fontSize: 14, fontWeight: 600, textAlign: "right" }} />
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 14, fontWeight: 600, color: isOver ? "#ef4444" : "#e4e4e7" }}>
-                              {"\u00A3"}{fmt(spent)}
-                            </span>
-                            {spent > 0 && <span style={{ color: "#3f3f46", fontSize: 14 }}>{"\u203A"}</span>}
-                          </div>
-                        )}
-                      </div>
-                      {budget > 0 && !editingBudget && (
-                        <>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                            <span style={{ fontSize: 11, color: isOver ? "#ef4444" : "#52525b" }}>
-                              {isOver ? `\u00A3${fmt(spent - budget)} over` : `\u00A3${fmt(budget - spent)} left`}
-                            </span>
-                            <span style={{ fontSize: 11, color: "#3f3f46" }}>of {"\u00A3"}{budget}</span>
-                          </div>
-                          <div style={{ marginTop: 6, height: 4, background: "rgba(255,255,255,0.04)", borderRadius: 2 }}>
-                            <div style={{ width: `${pct}%`, height: "100%", background: isOver ? "#ef4444" : cat.color, borderRadius: 2, transition: "width 0.4s" }} />
-                          </div>
-                        </>
-                      )}
-                      {budget === 0 && !editingBudget && spent > 0 && (
-                        <div style={{ fontSize: 11, color: "#3f3f46", marginTop: 2 }}>No budget set</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
 
