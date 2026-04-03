@@ -968,24 +968,22 @@ export default function Dashboard() {
   const getBudget = (catId) => budgetOverrides[catId] ?? CATEGORIES.find((c) => c.id === catId)?.budget ?? 0;
   const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
-  const totalSpend = spending; // ALL spending in period, same as overview
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
+  // Committed = recurring total (what you EXPECT to pay: rent, subs, family transfer, etc.)
+  const committedSpend = recurringTotal;
+  // Spending = ACTUAL spend excluding committed category transactions
   const committedCatIds = ["housing", "bills", "subscriptions", "family"];
-  // Committed = ACTUAL spending in committed categories (not budget amounts)
-  const committedSpend = Object.entries(categorySpending)
-    .filter(([catId]) => committedCatIds.includes(catId))
-    .reduce((s, [, data]) => s + data.total, 0);
-  // Variable = ACTUAL spending in everything else
   const variableSpend = Object.entries(categorySpending)
     .filter(([catId]) => !committedCatIds.includes(catId))
     .reduce((s, [, data]) => s + data.total, 0);
-  // Verify: variableSpend + committedSpend should equal totalSpend (= spending from overview)
+  // Total budget available for variable spending
+  const variableBudget = totalBudget - committedSpend;
 
   // Days calculation
   const daysInPeriod = useMemo(() => Math.ceil((budgetEnd - budgetCutoff) / 86400000), [budgetCutoff, budgetEnd]);
   const dayOfPeriod = useMemo(() => Math.ceil((new Date() - budgetCutoff) / 86400000), [budgetCutoff]);
   const daysLeft = Math.max(daysInPeriod - dayOfPeriod, 1);
-  const dailyAllowance = Math.max((totalBudget - totalSpend) / daysLeft, 0);
+  const dailyAllowance = Math.max((variableBudget - variableSpend) / daysLeft, 0);
 
   const saveRecurring = (items) => { setRecurring(items); localStorage.setItem("recurring_items", JSON.stringify(items)); };
   const updateRecurringItem = (id, field, value) => {
