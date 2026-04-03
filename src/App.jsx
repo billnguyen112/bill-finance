@@ -397,10 +397,10 @@ function getMerchantLogo(merchantName, rawMerchant) {
   if (!merchantName && !rawMerchant) return null;
   const combinedText = `${merchantName || ""} ${rawMerchant || ""}`;
 
-  // 1. Try regex rules against combined text
+  // 1. Try regex rules against combined text → use Google favicons (always reliable, never blank)
   for (const rule of MERCHANT_LOGO_RULES) {
     if (rule.p.test(combinedText)) {
-      const url = `https://icon.horse/icon/${rule.d}`;
+      const url = `https://www.google.com/s2/favicons?domain=${rule.d}&sz=128`;
       if (!brokenLogos.has(url)) return url;
     }
   }
@@ -409,70 +409,64 @@ function getMerchantLogo(merchantName, rawMerchant) {
   const raw = (rawMerchant || merchantName || "").toLowerCase();
   const domainMatch = raw.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
   if (domainMatch) {
-    const url = `https://icon.horse/icon/${domainMatch[1]}`;
+    const url = `https://www.google.com/s2/favicons?domain=${domainMatch[1]}&sz=128`;
     if (!brokenLogos.has(url)) return url;
   }
 
-  // 3. Try guessing domain from first word of cleaned merchant name
-  if (merchantName) {
-    const firstWord = merchantName.replace(/[^a-zA-Z\s]/g, "").trim().split(/\s+/)[0];
-    if (firstWord && firstWord.length >= 4) {
-      const guessUrl = `https://icon.horse/icon/${firstWord.toLowerCase()}.com`;
-      if (!brokenLogos.has(guessUrl)) return guessUrl;
-    }
-  }
-
-  return null;
+  return null; // No guessing — show clean letter fallback instead of broken icon
 }
 
-// Logo component with fallback chain: icon.horse → Google favicon → styled letter
+// Deterministic color from string — consistent per merchant
+const LETTER_COLORS = [
+  "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e",
+  "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#22c55e",
+  "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1",
+];
+function merchantColor(name) {
+  let hash = 0;
+  for (let i = 0; i < (name || "").length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return LETTER_COLORS[Math.abs(hash) % LETTER_COLORS.length];
+}
+
+// Logo component — consumer-grade with proper fallback
 function MerchantIcon({ merchant, rawMerchant, categoryId, size = 44 }) {
-  const [errorCount, setErrorCount] = useState(0);
+  const [imgState, setImgState] = useState("loading"); // loading | loaded | failed
   const logoUrl = useMemo(() => getMerchantLogo(merchant, rawMerchant), [merchant, rawMerchant]);
-  const cat = getCat(categoryId);
 
-  // Extract domain for Google favicon fallback
-  const domain = useMemo(() => {
-    if (!logoUrl) return null;
-    const m = logoUrl.match(/icon\.horse\/icon\/([^?]+)/);
-    return m ? m[1] : null;
-  }, [logoUrl]);
-
-  const googleFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
-
-  // errorCount: 0 = try icon.horse, 1 = try google favicon, 2+ = letter
-  const currentUrl = errorCount === 0 ? logoUrl : errorCount === 1 ? googleFavicon : null;
-
-  if (currentUrl) {
-    return (
-      <div style={{
-        width: size, height: size, borderRadius: size / 2, overflow: "hidden", flexShrink: 0,
-        background: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <img
-          src={currentUrl}
-          alt=""
-          width={size}
-          height={size}
-          style={{ objectFit: "cover", display: "block" }}
-          onError={() => setErrorCount(c => c + 1)}
-          loading="lazy"
-        />
-      </div>
-    );
-  }
-
-  // Final fallback: colored circle with first letter (Revolut style)
   const initial = (merchant || "?").replace(/^[^a-zA-Z]*/, "").charAt(0).toUpperCase() || "?";
+  const bgColor = merchantColor(merchant);
+
+  // Always render the letter fallback as base, overlay logo on top when loaded
   return (
     <div style={{
       width: size, height: size, borderRadius: size / 2, flexShrink: 0,
-      background: cat.color,
+      background: bgColor,
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: size * 0.4, fontWeight: 700, color: "#fff",
+      position: "relative", overflow: "hidden",
     }}>
-      {initial}
+      {/* Letter always visible as base */}
+      {(imgState !== "loaded") && initial}
+      {/* Logo overlays on top when available */}
+      {logoUrl && imgState !== "failed" && (
+        <img
+          src={logoUrl}
+          alt=""
+          width={size}
+          height={size}
+          style={{
+            position: "absolute", inset: 0,
+            width: size, height: size,
+            objectFit: "cover", display: "block",
+            borderRadius: size / 2,
+            opacity: imgState === "loaded" ? 1 : 0,
+            transition: "opacity 0.2s ease",
+          }}
+          onLoad={() => setImgState("loaded")}
+          onError={() => { brokenLogos.add(logoUrl); setImgState("failed"); }}
+          loading="lazy"
+        />
+      )}
     </div>
   );
 }
