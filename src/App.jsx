@@ -176,6 +176,33 @@ function BarChart({ income, spending, maxVal }) {
   );
 }
 
+// SVG icon paths for each category (Feather/Lucide style)
+const CAT_ICONS = {
+  family: <><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></>,
+  personal_care: <><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></>,
+  eating_out: <><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></>,
+  entertainment: <><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></>,
+  bills: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></>,
+  transport: <><path d="M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="17" r="3"/><path d="M10 17h4"/></>,
+  shopping: <><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></>,
+  groceries: <><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></>,
+  housing: <><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
+  subscriptions: <><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></>,
+  income: <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></>,
+  work_travel: <><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></>,
+  transfer: <><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></>,
+  investment: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+  general: <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></>,
+};
+
+function CategorySvg({ id, color = "#fff", size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {CAT_ICONS[id] || CAT_ICONS.general}
+    </svg>
+  );
+}
+
 function CategoryPicker({ onSelect, onClose }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
@@ -185,9 +212,9 @@ function CategoryPicker({ onSelect, onClose }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {CATEGORIES.map((cat) => (
             <button key={cat.id} onClick={() => onSelect(cat.id)}
-              style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", background: "none", border: "none", borderRadius: 12, cursor: "pointer", color: "#e4e4e7", fontSize: 15, textAlign: "left", width: "100%" }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: cat.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <div style={{ width: 14, height: 14, borderRadius: "50%", background: "rgba(255,255,255,0.3)" }} />
+              style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", background: "none", border: "none", borderRadius: 12, cursor: "pointer", color: "#e4e4e7", fontSize: 15, textAlign: "left", width: "100%" }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <CategorySvg id={cat.id} color={cat.color} size={18} />
               </div>
               <span style={{ fontWeight: 500 }}>{cat.label}</span>
             </button>
@@ -1259,7 +1286,7 @@ export default function Dashboard() {
                   <button onClick={() => setTxCategoryFilter(null)}
                     style={{ padding: "4px 10px", fontSize: 11, border: "none", borderRadius: 8, cursor: "pointer",
                       background: `${getCat(txCategoryFilter).color}20`, color: getCat(txCategoryFilter).color, fontWeight: 600 }}>
-                    {getCat(txCategoryFilter).icon} {"\u2715"}
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}><CategorySvg id={txCategoryFilter} color={getCat(txCategoryFilter).color} size={12} /> {"\u2715"}</span>
                   </button>
                 )}
                 <button onClick={() => setShowAccountFilter(true)}
