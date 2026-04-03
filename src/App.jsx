@@ -969,12 +969,11 @@ export default function Dashboard() {
   const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
+  const committedCatIds = ["housing", "bills", "subscriptions"];
   // Committed = recurring items in committed categories ONLY (housing, bills, subs)
   const committedSpend = recurring
     .filter(r => committedCatIds.includes(r.categoryId))
     .reduce((s, r) => s + r.amount, 0);
-  // Spending = ACTUAL spend excluding committed category transactions
-  const committedCatIds = ["housing", "bills", "subscriptions"];
   const variableSpend = Object.entries(categorySpending)
     .filter(([catId]) => !committedCatIds.includes(catId))
     .reduce((s, [, data]) => s + data.total, 0);
