@@ -947,7 +947,15 @@ export default function Dashboard() {
   }, [allTransactions, budgetCutoff]);
 
   const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
-  const spending = useMemo(() => periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [periodTransactions]);
+  const spending = useMemo(() => {
+    const spendTxns = periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
+    const total = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
+    // Debug: log spending breakdown
+    const excluded = periodTransactions.filter((t) => t.amount < 0 && EXCLUDED_FROM_SPENDING.includes(t.categoryId));
+    console.log(`[BUDGET] Period txns: ${periodTransactions.length} | Spending txns: ${spendTxns.length} (£${total.toFixed(2)}) | Excluded: ${excluded.length} (£${excluded.reduce((s,t) => s + Math.abs(t.amount), 0).toFixed(2)})`);
+    excluded.forEach(t => console.log(`  [EXCLUDED] ${t.merchant} | £${Math.abs(t.amount).toFixed(2)} | cat=${t.categoryId}`));
+    return total;
+  }, [periodTransactions]);
   const netFlow = income - spending;
   const savingsRate = income > 0 ? Math.max(Math.min(Math.round(((income - spending) / income) * 100), 100), -100) : 0;
 
@@ -966,7 +974,7 @@ export default function Dashboard() {
   const getBudget = (catId) => budgetOverrides[catId] ?? CATEGORIES.find((c) => c.id === catId)?.budget ?? 0;
   const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
-  const totalSpend = budgetedCats.reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
+  const totalSpend = spending; // ALL spending in period, same as overview
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
   const committedCatIds = ["housing", "bills", "subscriptions", "family"];
   const committedSpend = budgetedCats.filter((c) => committedCatIds.includes(c.id)).reduce((s, c) => s + (categorySpending[c.id]?.total || 0), 0);
