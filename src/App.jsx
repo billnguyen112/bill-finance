@@ -577,30 +577,48 @@ async function startBankConnect() {
   window.location.href = url;
 }
 
-async function fetchAccounts(token) {
-  const res = await fetch("/api/accounts", { headers: { Authorization: `Bearer ${token}` } });
-  return res.json();
+// Auto-refresh: if a request returns 401/token_expired, refresh and retry once
+async function tlFetch(url, token) {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const data = await res.json();
+
+  if (res.status === 401 || data.error === "token_expired") {
+    // Try refreshing
+    const newToken = await refreshAccessToken(token);
+    if (newToken) {
+      const retry = await fetch(url, { headers: { Authorization: `Bearer ${newToken}` } });
+      return { data: await retry.json(), newToken };
+    }
+    return { data: { error: "token_expired" }, newToken: null };
+  }
+  return { data, newToken: null };
 }
-async function fetchBalance(token, accountId) {
-  const res = await fetch(`/api/accounts/${accountId}/balance`, { headers: { Authorization: `Bearer ${token}` } });
-  return res.json();
+
+async function refreshAccessToken(oldToken) {
+  try {
+    const res = await fetch("/api/refresh", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${oldToken}` },
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      console.log("[TOKEN] Refreshed successfully");
+      return data.access_token;
+    }
+    console.warn("[TOKEN] Refresh failed:", data.message);
+    return null;
+  } catch (err) {
+    console.warn("[TOKEN] Refresh error:", err.message);
+    return null;
+  }
 }
-async function fetchTransactions(token, accountId) {
-  const res = await fetch(`/api/accounts/${accountId}/transactions`, { headers: { Authorization: `Bearer ${token}` } });
-  return res.json();
-}
-async function fetchCards(token) {
-  const res = await fetch("/api/cards", { headers: { Authorization: `Bearer ${token}` } });
-  return res.json();
-}
-async function fetchCardBalance(token, cardId) {
-  const res = await fetch(`/api/cards/${cardId}/balance`, { headers: { Authorization: `Bearer ${token}` } });
-  return res.json();
-}
-async function fetchCardTransactions(token, cardId) {
-  const res = await fetch(`/api/cards/${cardId}/transactions`, { headers: { Authorization: `Bearer ${token}` } });
-  return res.json();
-}
+
+async function fetchAccounts(token) { return tlFetch("/api/accounts", token); }
+async function fetchBalance(token, accountId) { return tlFetch(`/api/accounts/${accountId}/balance`, token); }
+async function fetchTransactions(token, accountId) { return tlFetch(`/api/accounts/${accountId}/transactions`, token); }
+async function fetchCards(token) { return tlFetch("/api/cards", token); }
+async function fetchCardBalance(token, cardId) { return tlFetch(`/api/cards/${cardId}/balance`, token); }
+async function fetchCardTransactions(token, cardId) { return tlFetch(`/api/cards/${cardId}/transactions`, token); }
 
 // ── Date helpers ────────────────────────────────────
 const MONTHS_MAP = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
@@ -670,42 +688,57 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Fetch bank data
+  // Helper: unwrap tlFetch result, update token if refreshed
+  const unwrap = (result, token, tokenUpdates) => {
+    if (result.newToken) {
+      tokenUpdates.set(token, result.newToken);
+    }
+    return result.data;
+  };
+
+  // Fetch bank data with auto-refresh
   const loadBankData = useCallback(async () => {
     if (tlTokens.length === 0) return;
     setBankLoading(true);
     setBankError(null);
     const allAccounts = [];
     const allTxns = [];
+    const tokenUpdates = new Map(); // old token → new token
 
-    for (const token of tlTokens) {
+    for (let token of tlTokens) {
+      // Use refreshed token if we already got one this cycle
+      if (tokenUpdates.has(token)) token = tokenUpdates.get(token);
+
       try {
-        let accountsRes;
-        try { accountsRes = await fetchAccounts(token); } catch { accountsRes = {}; }
-        if (accountsRes.error || accountsRes.status === "Failed") {
-          console.warn("Token expired or invalid:", accountsRes.error);
+        let accountsData;
+        try { accountsData = unwrap(await fetchAccounts(token), token, tokenUpdates); } catch { accountsData = {}; }
+        // Update token reference if it was refreshed
+        if (tokenUpdates.has(token)) token = tokenUpdates.get(token);
+
+        if (accountsData.error || accountsData.status === "Failed") {
+          console.warn("Token issue:", accountsData.error);
           continue;
         }
-        const accounts = accountsRes.results || [];
+        const accounts = accountsData.results || [];
         for (const acc of accounts) {
           try {
-            const balRes = await fetchBalance(token, acc.account_id);
-            const bal = balRes.results?.[0];
+            const balData = unwrap(await fetchBalance(token, acc.account_id), token, tokenUpdates);
+            const bal = balData.results?.[0];
             allAccounts.push({ ...acc, balance: bal?.current || 0, currency: bal?.currency || "GBP", source: "truelayer" });
           } catch { allAccounts.push({ ...acc, balance: 0, source: "truelayer" }); }
           try {
-            const txRes = await fetchTransactions(token, acc.account_id);
-            (txRes.results || []).forEach((tx) => allTxns.push(mapTx(tx, acc.display_name)));
-          } catch (e) { console.warn("Failed to fetch txns for", acc.display_name, e.message); }
+            const txData = unwrap(await fetchTransactions(token, acc.account_id), token, tokenUpdates);
+            (txData.results || []).forEach((tx) => allTxns.push(mapTx(tx, acc.display_name)));
+          } catch (e) { console.warn("Failed txns for", acc.display_name, e.message); }
         }
 
-        let cardsRes;
-        try { cardsRes = await fetchCards(token); } catch { cardsRes = {}; }
-        const cards = cardsRes.results || [];
+        let cardsData;
+        try { cardsData = unwrap(await fetchCards(token), token, tokenUpdates); } catch { cardsData = {}; }
+        const cards = cardsData.results || [];
         for (const card of cards) {
           try {
-            const balRes = await fetchCardBalance(token, card.account_id);
-            const bal = balRes.results?.[0];
+            const balData = unwrap(await fetchCardBalance(token, card.account_id), token, tokenUpdates);
+            const bal = balData.results?.[0];
             allAccounts.push({
               ...card,
               display_name: card.display_name || card.card_type || "Credit Card",
@@ -716,13 +749,23 @@ export default function Dashboard() {
             });
           } catch { allAccounts.push({ ...card, balance: 0, type: "Credit Card", source: "truelayer" }); }
           try {
-            const txRes = await fetchCardTransactions(token, card.account_id);
-            (txRes.results || []).forEach((tx) => allTxns.push(mapTx(tx, card.display_name)));
+            const txData = unwrap(await fetchCardTransactions(token, card.account_id), token, tokenUpdates);
+            (txData.results || []).forEach((tx) => allTxns.push(mapTx(tx, card.display_name)));
           } catch { /* skip */ }
         }
       } catch (err) {
         console.warn("Bank data load error:", err.message);
       }
+    }
+
+    // Persist any refreshed tokens
+    if (tokenUpdates.size > 0) {
+      setTlTokens((prev) => {
+        const updated = prev.map((t) => tokenUpdates.get(t) || t);
+        localStorage.setItem("tl_tokens", JSON.stringify(updated));
+        console.log(`[TOKEN] Updated ${tokenUpdates.size} token(s) in localStorage`);
+        return updated;
+      });
     }
 
     allTxns.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
