@@ -1175,7 +1175,8 @@ export default function Dashboard() {
     });
   }, [ibkrPositions, ibkrFxRates]);
 
-  const totalCurrentValue = holdings.reduce((s, h) => s + h.value, 0);
+  const ibkrCash = ibkrAccounts.reduce((s, a) => s + (a._summary?.totalcashvalue?.amount || 0), 0);
+  const totalCurrentValue = holdings.reduce((s, h) => s + h.value, 0) + ibkrCash;
   const totalCostBasis = holdings.reduce((s, h) => s + h.costBasis, 0);
   const totalPnlAbs = totalCurrentValue - totalCostBasis;
   const totalPnlPct = totalCostBasis > 0 ? ((totalPnlAbs / totalCostBasis) * 100) : 0;
