@@ -865,6 +865,7 @@ export default function Dashboard() {
     change: null,
     currency: acc.currency || "GBP",
     source: "truelayer",
+    provider: acc.provider?.display_name || acc.provider?.provider_id || "",
   }));
 
   const mergedAccounts = tlAccounts.length > 0
@@ -1068,21 +1069,17 @@ export default function Dashboard() {
 
           {/* Account list */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {mergedAccounts.map((acc, i) => (
+            {mergedAccounts.map((acc, i) => {
+              // Get logo for bank provider
+              const providerLogo = acc.source === "truelayer" ? getMerchantLogo(acc.provider || acc.name, acc.name) : getMerchantLogo(acc.name, acc.name);
+              return (
               <div key={acc.name + i} style={{ ...card, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: acc.source === "truelayer" ? "rgba(99,102,241,0.12)" : "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {(acc.type === "Brokerage" || acc.type === "ISA") && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}
-                    {acc.type === "Crypto" && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
-                    {acc.type === "Private Equity" && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
-                    {acc.type === "Credit Card" && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f472b6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>}
-                    {acc.type === "Bank" && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={acc.source === "truelayer" ? "#818cf8" : "#71717a"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M3 10h18"/><path d="M5 6l7-3 7 3"/><line x1="4" y1="10" x2="4" y2="21"/><line x1="20" y1="10" x2="20" y2="21"/></svg>}
-                    {!["Brokerage","ISA","Crypto","Private Equity","Credit Card","Bank"].includes(acc.type) && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}
-                  </div>
+                  <MerchantIcon merchant={acc.provider || acc.name} rawMerchant={acc.name} categoryId="general" size={38} />
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 500 }}>{acc.name}</div>
                     <div style={{ fontSize: 11, color: "#52525b", marginTop: 1 }}>
-                      {acc.type}
+                      {acc.provider && acc.provider !== acc.name ? acc.provider : acc.type}
                       {acc.source === "truelayer" && <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 5px", background: "rgba(99,102,241,0.12)", color: "#818cf8", borderRadius: 4, fontWeight: 600 }}>LIVE</span>}
                     </div>
                   </div>
@@ -1092,7 +1089,8 @@ export default function Dashboard() {
                   {acc.change !== null && acc.change !== 0 && <div style={{ fontSize: 11, color: acc.change >= 0 ? "#34d399" : "#ef4444", marginTop: 1 }}>{acc.change >= 0 ? "\u2191" : "\u2193"} {Math.abs(acc.change)}%</div>}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* This month summary */}
