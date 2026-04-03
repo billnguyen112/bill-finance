@@ -727,6 +727,8 @@ export default function Dashboard() {
   const [txCategoryFilter, setTxCategoryFilter] = useState(null);
   const [customMonth, setCustomMonth] = useState(new Date().getMonth());
   const [customYear, setCustomYear] = useState(new Date().getFullYear());
+  const [selectedTx, setSelectedTx] = useState(null); // transaction detail sheet
+  const [refreshing, setRefreshing] = useState(false);
 
   // Handle OAuth callback
   useEffect(() => {
@@ -837,6 +839,12 @@ export default function Dashboard() {
   }, [tlTokens]);
 
   useEffect(() => { loadBankData(); }, [loadBankData]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadBankData();
+    setRefreshing(false);
+  }, [loadBankData]);
 
   const disconnectBank = () => {
     localStorage.removeItem("tl_tokens");
@@ -1255,6 +1263,17 @@ export default function Dashboard() {
             ))}
           </div>
 
+          {/* Refresh bar */}
+          {tlTokens.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <button onClick={handleRefresh} disabled={refreshing}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: "rgba(255,255,255,0.04)", border: "none", borderRadius: 20, cursor: "pointer", color: refreshing ? "#52525b" : "#71717a", fontSize: 13, fontWeight: 500 }}>
+                <span style={{ display: "inline-block", transition: "transform 0.3s", transform: refreshing ? "rotate(360deg)" : "none" }}>{"\u21BB"}</span>
+                {refreshing ? "Refreshing..." : "Pull to refresh"}
+              </button>
+            </div>
+          )}
+
           {/* Transaction groups — Revolut style */}
           {dateKeys.map((date) => {
             const group = groups[date];
@@ -1271,25 +1290,23 @@ export default function Dashboard() {
                 <div style={{ background: "rgba(255,255,255,0.025)", borderRadius: 16, overflow: "hidden" }}>
                   {group.txns.map((tx, i) => {
                     const cat = getCat(tx.categoryId);
-                    // Format time — skip dummy timestamps (00:00, 01:00)
                     let time = "";
                     if (tx.timestamp) {
                       const d = new Date(tx.timestamp);
-                      const h = d.getHours();
-                      if (h >= 2) { // Only show real times, not midnight/1am placeholders
-                        time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-                      }
+                      if (d.getHours() >= 2) time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
                     }
-                    // Subtitle: category label (subtle), then account
-                    const subtitle = [cat.label, tx.accountName].filter(Boolean).join(" \u00B7 ");
+                    const subtitle = [time, cat.label, tx.accountName].filter(Boolean).join(" \u00B7 ");
                     return (
                       <div key={tx.id}
-                        onClick={() => setEditingTx(tx.id)}
-                        style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < group.txns.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", cursor: "pointer" }}>
+                        onClick={() => setSelectedTx(tx)}
+                        style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < group.txns.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", cursor: "pointer", opacity: tx.pending ? 0.6 : 1 }}>
                         <MerchantIcon merchant={tx.merchant} rawMerchant={tx.rawMerchant} categoryId={tx.categoryId} size={44} />
                         <div style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
-                          <div style={{ fontSize: 15, fontWeight: 500, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
-                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time ? `${time} \u00B7 ` : ""}{subtitle}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 15, fontWeight: 500, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</span>
+                            {tx.pending && <span style={{ fontSize: 9, fontWeight: 600, color: "#fbbf24", background: "rgba(251,191,36,0.12)", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>PENDING</span>}
+                          </div>
+                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{subtitle}</div>
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7", flexShrink: 0, marginLeft: 12 }}>
                           {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
@@ -1919,6 +1936,69 @@ export default function Dashboard() {
             {catTxns.length === 0 && (
               <div style={{ textAlign: "center", padding: "30px 0", color: "#3f3f46", fontSize: 13 }}>No transactions in this category</div>
             )}
+          </BottomSheet>
+        );
+      })()}
+
+      {/* Transaction detail sheet */}
+      {selectedTx && (() => {
+        const tx = selectedTx;
+        const cat = getCat(tx.categoryId);
+        let time = "";
+        if (tx.timestamp) {
+          const d = new Date(tx.timestamp);
+          if (d.getHours() >= 2) time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+        }
+        const fullDate = tx.fullDate || tx.date;
+        return (
+          <BottomSheet onClose={() => setSelectedTx(null)}>
+            {/* Merchant logo + name */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 20 }}>
+              <MerchantIcon merchant={tx.merchant} rawMerchant={tx.rawMerchant} categoryId={tx.categoryId} size={64} />
+              <div style={{ fontSize: 20, fontWeight: 700, marginTop: 14 }}>{tx.merchant}</div>
+              <div style={{ fontSize: 13, color: "#71717a", marginTop: 4 }}>{fullDate}{time ? ` at ${time}` : ""}</div>
+              {tx.pending && <div style={{ fontSize: 11, fontWeight: 600, color: "#fbbf24", background: "rgba(251,191,36,0.12)", padding: "3px 10px", borderRadius: 6, marginTop: 8 }}>Pending</div>}
+            </div>
+
+            {/* Amount */}
+            <div style={{ textAlign: "center", padding: "16px 0", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ fontSize: 36, fontWeight: 800, color: tx.amount >= 0 ? "#34d399" : "#f4f4f5" }}>
+                {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
+              </div>
+            </div>
+
+            {/* Details rows */}
+            <div style={{ padding: "16px 0" }}>
+              {/* Category — tappable to change */}
+              <div onClick={() => { setSelectedTx(null); setEditingTx(tx.id); }}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.04)", cursor: "pointer" }}>
+                <span style={{ fontSize: 14, color: "#71717a" }}>Category</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, color: cat.color, fontWeight: 500 }}>{cat.icon} {cat.label}</span>
+                  <span style={{ color: "#3f3f46", fontSize: 12 }}>{"\u203A"}</span>
+                </div>
+              </div>
+
+              {/* Account */}
+              {tx.accountName && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <span style={{ fontSize: 14, color: "#71717a" }}>Account</span>
+                  <span style={{ fontSize: 14, color: "#a1a1aa" }}>{tx.accountName}</span>
+                </div>
+              )}
+
+              {/* Type */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <span style={{ fontSize: 14, color: "#71717a" }}>Type</span>
+                <span style={{ fontSize: 14, color: "#a1a1aa" }}>{tx.amount >= 0 ? "Credit" : "Debit"}</span>
+              </div>
+
+              {/* Status */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0" }}>
+                <span style={{ fontSize: 14, color: "#71717a" }}>Status</span>
+                <span style={{ fontSize: 14, color: tx.pending ? "#fbbf24" : "#34d399", fontWeight: 500 }}>{tx.pending ? "Pending" : "Completed"}</span>
+              </div>
+            </div>
           </BottomSheet>
         );
       })()}
