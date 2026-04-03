@@ -372,21 +372,87 @@ const MERCHANT_LOGO_RULES = [
 // Cache for broken logo URLs to avoid retrying
 const brokenLogos = new Set();
 
+// Well-known merchant display names — override messy bank data
+const MERCHANT_DISPLAY = [
+  { p: /\btfl\b|transport\s*for\s*london/i, name: "Transport for London" },
+  { p: /\bsainsbury/i, name: "Sainsbury's" },
+  { p: /\btesco/i, name: "Tesco" },
+  { p: /\bamazon/i, name: "Amazon" },
+  { p: /\bapple\.com|apple\s*store/i, name: "Apple" },
+  { p: /\bnetflix/i, name: "Netflix" },
+  { p: /\bspotify/i, name: "Spotify" },
+  { p: /\byoutube\s*premium/i, name: "YouTube Premium" },
+  { p: /\bgoogle\s*youtube/i, name: "YouTube Premium" },
+  { p: /\bgoogle\s*one/i, name: "Google One" },
+  { p: /\bgoogle\s*storage/i, name: "Google Storage" },
+  { p: /\bdeliveroo/i, name: "Deliveroo" },
+  { p: /\buber\s*eats/i, name: "Uber Eats" },
+  { p: /\bjust\s*eat/i, name: "Just Eat" },
+  { p: /\btrading\s*212/i, name: "Trading 212" },
+  { p: /\binteractive\s*broker/i, name: "Interactive Brokers" },
+  { p: /\bseedr/i, name: "Seedrs" },
+  { p: /\bmonzo\b/i, name: "Monzo" },
+  { p: /\brevolut/i, name: "Revolut" },
+  { p: /\bhsbc\b/i, name: "HSBC" },
+  { p: /\bbarclays/i, name: "Barclays" },
+  { p: /\bchase\b/i, name: "Chase" },
+  { p: /\bwise\b/i, name: "Wise" },
+  { p: /\bstarling/i, name: "Starling" },
+  { p: /\bnationwide/i, name: "Nationwide" },
+  { p: /\banthropic|claude\.ai/i, name: "Anthropic (Claude)" },
+  { p: /\bopenai|chatgpt/i, name: "OpenAI" },
+  { p: /\bplaystation/i, name: "PlayStation" },
+  { p: /\bmarugame/i, name: "Marugame Udon" },
+  { p: /\bdishoom/i, name: "Dishoom" },
+  { p: /\bhonest\b/i, name: "Honest Burgers" },
+  { p: /\bleon\b/i, name: "Leon" },
+  { p: /\bodeon/i, name: "Odeon" },
+  { p: /\bpret\b/i, name: "Pret A Manger" },
+  { p: /\bstarbucks/i, name: "Starbucks" },
+  { p: /\bcosta\b/i, name: "Costa Coffee" },
+  { p: /\bmcdonald/i, name: "McDonald's" },
+  { p: /\bnando/i, name: "Nando's" },
+  { p: /\bgreggs/i, name: "Greggs" },
+  { p: /\bwagamama/i, name: "Wagamama" },
+  { p: /\bikea/i, name: "IKEA" },
+  { p: /\bemma\b/i, name: "Emma" },
+  { p: /\bboots\b/i, name: "Boots" },
+  { p: /\bgross\s*interest/i, name: "Bank Interest" },
+  { p: /\bemergency\s*fund/i, name: "Emergency Fund" },
+  { p: /\bpayment\s*-?\s*thank/i, name: "Card Payment" },
+];
+
 // Clean up messy TrueLayer merchant names for display
 function cleanMerchantName(raw) {
   if (!raw) return raw;
+
+  // 1. Try well-known display names first
+  for (const rule of MERCHANT_DISPLAY) {
+    if (rule.p.test(raw)) return rule.name;
+  }
+
+  // 2. General cleanup for unknown merchants
   let name = raw;
-  // Remove card numbers and references
-  name = name.replace(/\b(VSA?\d{4,}[\d*]*\S*)/gi, ""); // VISA card numbers
-  name = name.replace(/\b[A-Z]?\d{8,}\b/g, ""); // long reference numbers
-  name = name.replace(/\s*(GB|IE|US|UK|FR|DE|NL|LU|CH)\s*$/i, ""); // trailing country codes
-  name = name.replace(/\s*(CD|CP)\s+\d+/gi, ""); // CD/CP references
-  name = name.replace(/\*+/g, ""); // asterisks
-  name = name.replace(/\s*\/\s*(CP|CD|CF)\s*/gi, " "); // /CP /CD suffixes
-  name = name.replace(/\s+CH\s+/gi, " "); // " CH " (charge indicator)
-  name = name.replace(/Lim\d+$/i, ""); // "Lim42165300" suffixes
+  name = name.replace(/\b(VSA?\d{4,}[\d*]*\S*)/gi, "");
+  name = name.replace(/\bU?\d{8,}\b/g, ""); // reference numbers (U23466455)
+  name = name.replace(/\bObah[a-z0-9]+/gi, "");
+  name = name.replace(/\s*(GB|IE|US|UK|FR|DE|NL|LU|CH)\s*$/i, "");
+  name = name.replace(/\s*(CD|CP)\s+\d+/gi, "");
+  name = name.replace(/\*+/g, "");
+  name = name.replace(/\s*\/\s*(CP|CD|CF|BILL)\s*/gi, " ");
+  name = name.replace(/\s+CH\s+/gi, " ");
+  name = name.replace(/LIM\w*$/i, "");
+  // Remove city names
+  name = name.replace(/\s+(London|Manchester|Birmingham|Leeds|Bristol|Edinburgh|Glasgow|Liverpool|Sheffield|Leicester|Oxford|Cambridge|Brighton|Nottingham|Cardiff|Belfast|York|Bath|Reading|Southampton)\b/gi, "");
+  // Remove legal suffixes
+  name = name.replace(/\s+(Limited|Ltd|PLC|Inc|Corp|UK|Group|Holdings|Services|International|Europe)\b\.?/gi, "");
+  name = name.replace(/\s+S$/i, ""); // trailing S
+  name = name.replace(/\s+\d{1,5}\s*$/, ""); // trailing numbers
+  name = name.replace(/\s+To\s+\d{1,2}\w{3}\d{4}/gi, ""); // date refs
+  name = name.replace(/\s+-\s*$/, ""); // trailing dash
+  name = name.replace(/\s*\.\s*$/, ""); // trailing dot
   name = name.replace(/\s{2,}/g, " ").trim();
-  // Title case if all uppercase
+  // Title case if ALL CAPS
   if (name === name.toUpperCase() && name.length > 3) {
     name = name.replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
   }
@@ -435,30 +501,35 @@ function MerchantIcon({ merchant, rawMerchant, categoryId, size = 44 }) {
 
   const initial = (merchant || "?").replace(/^[^a-zA-Z]*/, "").charAt(0).toUpperCase() || "?";
   const bgColor = merchantColor(merchant);
+  const iconSize = Math.round(size * 0.6); // favicon renders at 60% of circle
 
   // Always render the letter fallback as base, overlay logo on top when loaded
   return (
     <div style={{
       width: size, height: size, borderRadius: size / 2, flexShrink: 0,
-      background: bgColor,
+      background: imgState === "loaded" ? "#fff" : bgColor,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.4, fontWeight: 700, color: "#fff",
+      fontSize: size * 0.42, fontWeight: 700, color: "#fff",
       position: "relative", overflow: "hidden",
+      transition: "background 0.2s ease",
+      border: imgState === "loaded" ? "1px solid rgba(255,255,255,0.08)" : "none",
+      boxSizing: "border-box",
     }}>
       {/* Letter always visible as base */}
-      {(imgState !== "loaded") && initial}
-      {/* Logo overlays on top when available */}
+      {imgState !== "loaded" && initial}
+      {/* Logo overlays on top when available — centered with padding like Revolut */}
       {logoUrl && imgState !== "failed" && (
         <img
           src={logoUrl}
           alt=""
-          width={size}
-          height={size}
+          width={iconSize}
+          height={iconSize}
           style={{
-            position: "absolute", inset: 0,
-            width: size, height: size,
-            objectFit: "cover", display: "block",
-            borderRadius: size / 2,
+            position: "absolute",
+            top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: iconSize, height: iconSize,
+            objectFit: "contain", display: "block",
             opacity: imgState === "loaded" ? 1 : 0,
             transition: "opacity 0.2s ease",
           }}
@@ -477,7 +548,7 @@ function MerchantIcon({ merchant, rawMerchant, categoryId, size = 44 }) {
 const BANK_NAMES = /\b(wise|revolut|monzo|starling|chase\b|hsbc|barclays|natwest|lloyds|nationwide|santander|halifax|first\s*direct|metro\s*bank|virgin\s*money|atom\s*bank|tsb\b|rbs\b|clydesdale|yorkshire|co-?operative\s*bank|triodos|n26\b|bunq|tide\b|cashplus|pockit|loot\b|curve\b|plum\b|chip\b|moneybox|nutmeg|wealthify|pensionbee)\b/i;
 
 // Transaction description patterns that indicate transfers
-const TRANSFER_DESC = /transfer|faster\s*payment|standing\s*order|direct\s*debit\s*(to|from)|ft\s*-|fp\s*-|bacs\b|chaps\b|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|moving\s*money|internal|current\s*account|payment\s*(to|from)\s*(mr|ms|mrs|miss)|sent\s*from|emergency\s*fund|saver\b|payment\s*-\s*thank|\b\d{6}\s+\d{7,8}\b|internet\s*t|bnk\s|on\s*bns\s*saver/i;
+const TRANSFER_DESC = /transfer|faster\s*payment|standing\s*order|direct\s*debit\s*(to|from)|ft\s*-|fp\s*-|bacs\b|chaps\b|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|moving\s*money|internal|current\s*account|payment\s*(to|from)\s*(mr|ms|mrs|miss)|sent\s*from|emergency\s*fund|saver\b|payment\s*-\s*thank|\b\d{6}\s+\d{7,8}\b|internet\s*t|bnk\s|on\s*bns\s*saver|huu\s*nguyen|bill\s*nguyen/i;
 
 const SPENDING_RULES = [
   // Housing — very specific
@@ -507,7 +578,7 @@ const SPENDING_RULES = [
 ];
 
 // Income patterns
-const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*paid|freelance|seedrs|spendesk|crowdcube|republic|bonus|commission|reward|compensation|settlement/i;
+const INCOME_PATTERN = /salary|payroll|wages|dividend|refund|cashback|interest\s*(paid|to)|gross\s*interest|freelance|seedrs|spendesk|crowdcube|republic|bonus|commission|reward|compensation|settlement/i;
 
 function categorize(merchantName, description, tlCategory, amount) {
   const text = `${merchantName || ""} ${description || ""}`.toLowerCase();
@@ -1208,8 +1279,17 @@ export default function Dashboard() {
                 <div style={{ background: "rgba(255,255,255,0.025)", borderRadius: 16, overflow: "hidden" }}>
                   {group.txns.map((tx, i) => {
                     const cat = getCat(tx.categoryId);
-                    // Format time from timestamp
-                    const time = tx.timestamp ? new Date(tx.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
+                    // Format time — skip dummy timestamps (00:00, 01:00)
+                    let time = "";
+                    if (tx.timestamp) {
+                      const d = new Date(tx.timestamp);
+                      const h = d.getHours();
+                      if (h >= 2) { // Only show real times, not midnight/1am placeholders
+                        time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+                      }
+                    }
+                    // Subtitle: category label (subtle), then account
+                    const subtitle = [cat.label, tx.accountName].filter(Boolean).join(" \u00B7 ");
                     return (
                       <div key={tx.id}
                         onClick={() => setEditingTx(tx.id)}
@@ -1217,7 +1297,7 @@ export default function Dashboard() {
                         <MerchantIcon merchant={tx.merchant} rawMerchant={tx.rawMerchant} categoryId={tx.categoryId} size={44} />
                         <div style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
                           <div style={{ fontSize: 15, fontWeight: 500, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
-                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time}{tx.accountName ? ` \u00B7 ${tx.accountName}` : ""}</div>
+                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time ? `${time} \u00B7 ` : ""}{subtitle}</div>
                         </div>
                         <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7", flexShrink: 0, marginLeft: 12 }}>
                           {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
