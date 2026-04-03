@@ -264,6 +264,21 @@ app.get('/api/ibkr/pnl', async (req, res) => {
   }
 })
 
+// Get performance (TWR returns) for account — used to calculate total P&L
+app.post('/api/ibkr/performance', async (req, res) => {
+  try {
+    const response = await fetch(`${IBKR_BASE}/pa/performance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    })
+    const data = await response.json()
+    res.json(data)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)

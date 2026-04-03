@@ -783,6 +783,7 @@ export default function Dashboard() {
   const [ibkrAccounts, setIbkrAccounts] = useState([]);
   const [ibkrPositions, setIbkrPositions] = useState([]);
   const [ibkrFxRates, setIbkrFxRates] = useState({ USD: 0.756, EUR: 0.872, SEK: 0.080, GBP: 1 });
+  const [ibkrTotalReturn, setIbkrTotalReturn] = useState(null); // TWR from IBKR performance API
 
   // IBKR: check connection and load data
   const loadIbkrData = useCallback(async () => {
@@ -822,6 +823,22 @@ export default function Dashboard() {
           if (data && data.exchangerate) rates[ccy] = data.exchangerate;
         }
         if (Object.keys(rates).length > 0) setIbkrFxRates(prev => ({ ...prev, ...rates }));
+      } catch {}
+
+      // Get TWR (time-weighted return) for total P&L calculation
+      try {
+        const perfRes = await fetch("/api/ibkr/performance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ acctIds: accounts.map(a => a.accountId), period: "1Y" }),
+        });
+        const perfData = await perfRes.json();
+        const cps = perfData?.cps?.data?.[0]?.returns;
+        if (cps && cps.length > 0) {
+          const totalReturn = cps[cps.length - 1]; // latest cumulative return
+          setIbkrTotalReturn(totalReturn);
+          console.log(`[IBKR] TWR: ${(totalReturn * 100).toFixed(2)}%`);
+        }
       } catch {}
 
       setIbkrAccounts([...accounts]);
@@ -1177,9 +1194,11 @@ export default function Dashboard() {
 
   const ibkrCash = ibkrAccounts.reduce((s, a) => s + (a._summary?.totalcashvalue?.amount || 0), 0);
   const totalCurrentValue = holdings.reduce((s, h) => s + h.value, 0) + ibkrCash;
-  const totalCostBasis = holdings.reduce((s, h) => s + h.costBasis, 0);
-  const totalPnlAbs = totalCurrentValue - totalCostBasis;
-  const totalPnlPct = totalCostBasis > 0 ? ((totalPnlAbs / totalCostBasis) * 100) : 0;
+  // Total P&L from TWR: deposits = NAV / (1 + return), P&L = NAV - deposits
+  const totalPnlPct = ibkrTotalReturn !== null ? ibkrTotalReturn * 100 : 0;
+  const netDeposits = ibkrTotalReturn !== null && ibkrTotalReturn !== -1 ? totalCurrentValue / (1 + ibkrTotalReturn) : totalCurrentValue;
+  const totalPnlAbs = totalCurrentValue - netDeposits;
+  const totalCostBasis = netDeposits;
   const sortedHoldings = useMemo(() => {
     return [...holdings].sort((a, b) => {
       if (holdingsSort === "pnl_abs") return (b.unrealizedPnl || 0) - (a.unrealizedPnl || 0);
