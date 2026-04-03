@@ -463,15 +463,12 @@ function getMerchantLogo(merchantName, rawMerchant) {
   if (!merchantName && !rawMerchant) return null;
   const combinedText = `${merchantName || ""} ${rawMerchant || ""}`;
 
-  // Try regex rules against combined text
+  // Brandfetch CDN — high-quality full-size brand logos (500k req/mo free)
+  // Returns actual brand logos, not tiny favicons
   for (const rule of MERCHANT_LOGO_RULES) {
     if (rule.p.test(combinedText)) {
-      // icon.horse returns full-size logos (better for full-bleed circles)
-      const url = `https://icon.horse/icon/${rule.d}`;
+      const url = `https://cdn.brandfetch.io/${rule.d}`;
       if (!brokenLogos.has(url)) return url;
-      // Fallback to Google favicon if icon.horse failed for this domain
-      const gUrl = `https://www.google.com/s2/favicons?domain=${rule.d}&sz=128`;
-      if (!brokenLogos.has(gUrl)) return gUrl;
     }
   }
 
@@ -479,7 +476,7 @@ function getMerchantLogo(merchantName, rawMerchant) {
   const raw = (rawMerchant || merchantName || "").toLowerCase();
   const domainMatch = raw.match(/([a-z0-9-]+\.(com|co\.uk|org|io|net|gov\.uk))/);
   if (domainMatch) {
-    const url = `https://icon.horse/icon/${domainMatch[1]}`;
+    const url = `https://cdn.brandfetch.io/${domainMatch[1]}`;
     if (!brokenLogos.has(url)) return url;
   }
 
