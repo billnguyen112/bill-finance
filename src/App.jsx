@@ -1866,145 +1866,89 @@ export default function Dashboard() {
 
         return (
         <div style={{ padding: "0 20px" }}>
-          {/* Period selector — Emma style horizontal scroll */}
-          <div style={{ margin: "16px 0 4px" }}>
-            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch" }}>
-              {[
-                { id: "payday", label: "Payday" },
-                { id: "month", label: "Monthly" },
-                { id: "90d", label: "3 Months" },
-                { id: "all", label: "All" },
-              ].map((r) => (
-                <button key={r.id} onClick={() => { setAnalyticsRange(r.id); setShowPeriodPicker(r.id === "month"); }}
-                  style={{ padding: "8px 18px", fontSize: 13, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                    background: analyticsRange === r.id ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.04)",
-                    color: analyticsRange === r.id ? "#818cf8" : "#71717a", fontWeight: analyticsRange === r.id ? 600 : 400 }}>
-                  {r.label}
-                </button>
-              ))}
-              <button onClick={() => setShowAccountFilter(true)}
-                style={{ padding: "8px 14px", fontSize: 13, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                  background: selectedAccounts && selectedAccounts.length > 0 ? "rgba(99,102,241,0.1)" : "rgba(255,255,255,0.04)",
-                  color: selectedAccounts && selectedAccounts.length > 0 ? "#818cf8" : "#71717a" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg> Filter
+          {/* Period navigator — Emma style with arrows */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0 4px" }}>
+            <button onClick={() => {
+              if (analyticsRange === "payday") setBudgetPeriodOffset(o => o - 1);
+              else if (analyticsRange === "month") setCustomMonth(m => { if (m === 0) { setCustomYear(y => y - 1); return 11; } return m - 1; });
+            }}
+              style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "none", color: "#a1a1aa", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {"\u2039"}
+            </button>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#818cf8" }}>{periodLabel}</span>
+              <span style={{ fontSize: 11, color: "#52525b", marginTop: 2 }}>{filteredTxns.length} transactions</span>
+            </div>
+            <button onClick={() => {
+              if (analyticsRange === "payday") setBudgetPeriodOffset(o => Math.min(o + 1, 0));
+              else if (analyticsRange === "month") setCustomMonth(m => { if (m === 11) { setCustomYear(y => y + 1); return 0; } return m + 1; });
+            }}
+              style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "none", color: "#a1a1aa", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {"\u203A"}
+            </button>
+          </div>
+
+          {/* Period type pills */}
+          <div style={{ display: "flex", gap: 6, margin: "8px 0 16px", overflowX: "auto", paddingBottom: 2 }}>
+            {[
+              { id: "payday", label: "Payday" },
+              { id: "month", label: "Monthly" },
+              { id: "90d", label: "3 Months" },
+              { id: "all", label: "All" },
+            ].map((r) => (
+              <button key={r.id} onClick={() => setAnalyticsRange(r.id)}
+                style={{ padding: "7px 16px", fontSize: 12, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                  background: analyticsRange === r.id ? "#e4e4e7" : "rgba(255,255,255,0.05)",
+                  color: analyticsRange === r.id ? "#09090f" : "#71717a", fontWeight: 600 }}>
+                {r.label}
               </button>
-            </div>
+            ))}
           </div>
 
-          {/* Month/Year picker — only shown for "Monthly" */}
-          {analyticsRange === "month" && (
-            <div style={{ ...card, padding: "14px 12px", marginTop: 8, marginBottom: 4 }}>
-              {/* Year row */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20, marginBottom: 12 }}>
-                <button onClick={() => setCustomYear(y => y - 1)}
-                  style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "none", color: "#a1a1aa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {"\u2039"}
-                </button>
-                <span style={{ fontSize: 16, fontWeight: 700, minWidth: 60, textAlign: "center" }}>{customYear}</span>
-                <button onClick={() => setCustomYear(y => Math.min(y + 1, now.getFullYear()))}
-                  style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "none", color: "#a1a1aa", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {"\u203A"}
-                </button>
-              </div>
-              {/* Month grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
-                {MONTH_SHORT.map((m, i) => {
-                  const isFuture = customYear === now.getFullYear() && i > now.getMonth();
-                  const isSelected = customMonth === i;
-                  return (
-                    <button key={m} onClick={() => !isFuture && setCustomMonth(i)} disabled={isFuture}
-                      style={{ padding: "10px 0", fontSize: 13, border: "none", borderRadius: 10, cursor: isFuture ? "default" : "pointer",
-                        background: isSelected ? "rgba(99,102,241,0.2)" : "rgba(255,255,255,0.03)",
-                        color: isFuture ? "#27272a" : isSelected ? "#818cf8" : "#a1a1aa",
-                        fontWeight: isSelected ? 700 : 400 }}>
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Period label */}
-          <div style={{ textAlign: "center", padding: "10px 0 8px" }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#818cf8" }}>{periodLabel}</span>
-            <span style={{ fontSize: 12, color: "#52525b", marginLeft: 8 }}>{filteredTxns.length} transactions</span>
-          </div>
-
-          {/* Summary card with bar chart */}
+          {/* Summary — Emma style: total spent + income/spending bar */}
           <div style={{ ...card, padding: "20px 16px", marginBottom: 14 }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 12, color: "#71717a", fontWeight: 500 }}>Net Flow</div>
-              <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4, color: fNet >= 0 ? "#34d399" : "#ef4444" }}>
-                {fNet >= 0 ? "+" : "-"}{"\u00A3"}{fmt(fNet)}
-              </div>
+            <div style={{ fontSize: 12, color: "#71717a" }}>Summary</div>
+            <div style={{ fontSize: 34, fontWeight: 800, marginTop: 4, color: fNet >= 0 ? "#34d399" : "#e4e4e7" }}>
+              {fNet >= 0 ? "+" : "-"}{"\u00A3"}{fmt(fNet)}
             </div>
             <BarChart income={fIncome} spending={fSpending} maxVal={Math.max(fIncome, fSpending) * 1.15 || 1} />
           </div>
 
-          {/* Quick stats row */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
-              <div style={{ fontSize: 11, color: "#71717a" }}>Daily Avg</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#f472b6", marginTop: 4 }}>{"\u00A3"}{dailyAvg.toFixed(2)}</div>
-            </div>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
-              <div style={{ fontSize: 11, color: "#71717a" }}>Txns</div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{spendTxns.length}</div>
-            </div>
-            <div style={{ ...card, flex: 1, textAlign: "center", padding: "14px 8px" }}>
-              <div style={{ fontSize: 11, color: "#71717a" }}>Savings</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: fIncome > 0 ? (savingsRateAnalytics > 20 ? "#34d399" : "#fbbf24") : "#71717a", marginTop: 4 }}>
-                {savingsRateAnalytics}%
-              </div>
-            </div>
-          </div>
-
-          {/* Category / Merchant toggle */}
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: 3, marginBottom: 14 }}>
-            {[{ id: "category", label: "By Category" }, { id: "merchant", label: "By Merchant" }].map((v) => (
+          {/* Category / Merchant toggle — Emma style */}
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", borderRadius: 14, padding: 3, marginBottom: 16 }}>
+            {[{ id: "category", label: "Category" }, { id: "merchant", label: "Merchant" }].map((v) => (
               <button key={v.id} onClick={() => setAnalyticsView(v.id)}
-                style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, border: "none", borderRadius: 10, cursor: "pointer",
-                  background: analyticsView === v.id ? "rgba(99,102,241,0.12)" : "transparent",
-                  color: analyticsView === v.id ? "#818cf8" : "#52525b" }}>
+                style={{ flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600, border: "none", borderRadius: 11, cursor: "pointer",
+                  background: analyticsView === v.id ? "#e4e4e7" : "transparent",
+                  color: analyticsView === v.id ? "#09090f" : "#52525b" }}>
                 {v.label}
               </button>
             ))}
           </div>
 
-          {/* Spending breakdown */}
+          {/* Spending header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>SPENDING</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#f472b6" }}>-{"\u00A3"}{fmt(fSpending)}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#818cf8" }}>Spending</span>
+            <span style={{ fontSize: 15, fontWeight: 700 }}>-{"\u00A3"}{fmt(fSpending)}</span>
           </div>
 
-          {/* Category view with percentage bars */}
+          {/* Category view — Emma style with colored left border */}
           {analyticsView === "category" && (
-            <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 16 }}>
               {sortedCats.map((cat, i) => {
                 const data = catMap[cat.id];
                 const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
                 return (
                   <div key={cat.id} onClick={() => { setDrillCategory(cat.id); setDrillSource("analytics"); }}
-                    style={{ padding: "14px 16px", borderBottom: i < sortedCats.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none", cursor: "pointer" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CategorySvg id={cat.id} color={cat.color} size={18} /></div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 14, fontWeight: 500 }}>{cat.label}</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 14, fontWeight: 600 }}>{"\u00A3"}{fmt(data.total)}</span>
-                            <span style={{ color: "#3f3f46", fontSize: 14 }}>{"\u203A"}</span>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                          <span style={{ fontSize: 11, color: "#52525b" }}>{data.count} txn{data.count !== 1 ? "s" : ""}</span>
-                          <span style={{ fontSize: 11, color: cat.color, fontWeight: 500 }}>{pct.toFixed(1)}%</span>
-                        </div>
-                        <div style={{ marginTop: 6, height: 3, background: "rgba(255,255,255,0.04)", borderRadius: 2 }}>
-                          <div style={{ width: `${pct}%`, height: "100%", background: cat.color, borderRadius: 2, transition: "width 0.4s" }} />
-                        </div>
-                      </div>
+                    style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 16px", cursor: "pointer", borderBottom: i < sortedCats.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", borderLeft: `3px solid ${cat.color}`, background: "rgba(255,255,255,0.02)", borderRadius: i === 0 ? "12px 12px 0 0" : i === sortedCats.length - 1 ? "0 0 12px 12px" : "0" }}>
+                    <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CategorySvg id={cat.id} color={cat.color} size={20} /></div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600 }}>{cat.label}</div>
+                      <div style={{ fontSize: 12, color: "#52525b", marginTop: 2 }}>{data.count} Transaction{data.count !== 1 ? "s" : ""}</div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 600 }}>-{"\u00A3"}{fmt(data.total)}</div>
+                      <div style={{ fontSize: 11, color: cat.color, fontWeight: 500, marginTop: 2 }}>{pct.toFixed(1)}%</div>
                     </div>
                   </div>
                 );
@@ -2017,27 +1961,20 @@ export default function Dashboard() {
 
           {/* Merchant view */}
           {analyticsView === "merchant" && (
-            <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 0, marginBottom: 16 }}>
               {sortedMerchants.map(([name, data], i) => {
                 const pct = fSpending > 0 ? (data.total / fSpending) * 100 : 0;
                 const cat = getCat(data.categoryId);
                 return (
-                  <div key={name} style={{ padding: "14px 16px", borderBottom: i < sortedMerchants.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <MerchantIcon merchant={name} categoryId={data.categoryId} size={40} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-                          <span style={{ fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{"\u00A3"}{fmt(data.total)}</span>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                          <span style={{ fontSize: 11, color: "#52525b" }}>{data.count} txn{data.count !== 1 ? "s" : ""} {"\u00B7"} {cat.label}</span>
-                          <span style={{ fontSize: 11, color: "#52525b" }}>{pct.toFixed(1)}%</span>
-                        </div>
-                        <div style={{ marginTop: 6, height: 3, background: "rgba(255,255,255,0.04)", borderRadius: 2 }}>
-                          <div style={{ width: `${pct}%`, height: "100%", background: cat.color, borderRadius: 2, transition: "width 0.4s" }} />
-                        </div>
-                      </div>
+                  <div key={name} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: i < sortedMerchants.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", borderLeft: `3px solid ${cat.color}`, background: "rgba(255,255,255,0.02)", borderRadius: i === 0 ? "12px 12px 0 0" : i === sortedMerchants.length - 1 ? "0 0 12px 12px" : "0" }}>
+                    <MerchantIcon merchant={name} categoryId={data.categoryId} size={40} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+                      <div style={{ fontSize: 11, color: "#52525b", marginTop: 2 }}>{data.count} txn{data.count !== 1 ? "s" : ""} {"\u00B7"} {cat.label}</div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600 }}>-{"\u00A3"}{fmt(data.total)}</div>
+                      <div style={{ fontSize: 11, color: "#52525b", marginTop: 2 }}>{pct.toFixed(1)}%</div>
                     </div>
                   </div>
                 );
@@ -2047,8 +1984,8 @@ export default function Dashboard() {
 
           {/* Income section */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <span style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500 }}>INCOME</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#34d399" }}>+{"\u00A3"}{fmt(fIncome)}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#34d399" }}>Income</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "#34d399" }}>+{"\u00A3"}{fmt(fIncome)}</span>
           </div>
           {sortedIncome.length > 0 ? (
             <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 16 }}>
