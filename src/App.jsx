@@ -3,7 +3,6 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 // ── Data ──────────────────────────────────────────────
 const ACCOUNTS = [
   { name: "IBKR ISA", type: "Brokerage", balance: 7712.68, change: -0.5, currency: "USD" },
-  { name: "Trading 212 ISA", type: "ISA", balance: 918, change: null, currency: "GBP" },
   { name: "Kraken", type: "Crypto", balance: 0, change: 0, currency: "GBP" },
   { name: "Republic", type: "Private Equity", balance: 1500, change: null, currency: "USD" },
 ];
@@ -14,7 +13,6 @@ const HOLDINGS = [
   { ticker: "SOI", name: "S.O.I.T.E.C.", value: 1100, costBasis: 1295, pnl: -15.1, account: "IBKR", sparkline: [55, 54, 53, 52, 52, 51, 52, 52] },
   { ticker: "LNSR", name: "Lensar Inc", value: 891, costBasis: 1168, pnl: -23.7, account: "IBKR", sparkline: [7, 6.5, 6.2, 6, 5.9, 5.8, 5.8, 5.84] },
   { ticker: "TSEM", name: "Tower Semiconductor", value: 601, costBasis: 793, pnl: -24.2, account: "IBKR", sparkline: [165, 162, 160, 158, 159, 158, 158, 158] },
-  { ticker: "IQE", name: "IQE plc", value: 918, costBasis: 1050, pnl: -12.6, account: "T212", sparkline: [0.25, 0.24, 0.23, 0.23, 0.22, 0.23, 0.23, 0.23] },
 ];
 
 const CATEGORIES = [
@@ -69,6 +67,12 @@ function getCat(id) {
 }
 
 function fmt(n) { return Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+// Smart format: -£12 not -£12.00, but -£12.95 stays
+function fmtSmart(n) {
+  const abs = Math.abs(n);
+  if (abs === Math.floor(abs)) return abs.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return abs.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 // ── Components ────────────────────────────────────────
 function MiniChart({ data, width = 120, height = 40 }) {
@@ -696,7 +700,7 @@ function formatDateHeader(dateStr) {
 
   if (isToday) return "Today";
   if (isYesterday) return "Yesterday";
-  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 }
 
 // ── Main ──────────────────────────────────────────────
@@ -1289,8 +1293,8 @@ export default function Dashboard() {
                 {/* Date header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0 0 12px" }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: "#e4e4e7" }}>{formatDateHeader(date)}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: group.total >= 0 ? "#34d399" : "#a1a1aa" }}>
-                    {group.total >= 0 ? "+" : "-"}{"\u00A3"}{fmt(group.total)}
+                  <span style={{ fontSize: 13, fontWeight: 500, color: group.total >= 0 ? "#34d399" : "#52525b" }}>
+                    {group.total >= 0 ? "+" : "-"}{"\u00A3"}{fmtSmart(group.total)}
                   </span>
                 </div>
                 {/* Transaction rows */}
@@ -1302,7 +1306,7 @@ export default function Dashboard() {
                       const d = new Date(tx.timestamp);
                       if (d.getHours() >= 2) time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
                     }
-                    const subtitle = [time, cat.label, tx.accountName].filter(Boolean).join(" \u00B7 ");
+                    const isExcluded = EXCLUDED_FROM_SPENDING.includes(tx.categoryId);
                     return (
                       <div key={tx.id}
                         onClick={() => setEditingTx(tx.id)}
@@ -1313,10 +1317,13 @@ export default function Dashboard() {
                             <span style={{ fontSize: 15, fontWeight: 500, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</span>
                             {tx.pending && <span style={{ fontSize: 9, fontWeight: 600, color: "#fbbf24", background: "rgba(251,191,36,0.12)", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>PENDING</span>}
                           </div>
-                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{subtitle}</div>
+                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time || cat.label}</div>
                         </div>
-                        <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7", flexShrink: 0, marginLeft: 12 }}>
-                          {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
+                        <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7" }}>
+                            {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmtSmart(tx.amount)}
+                          </div>
+                          {isExcluded && <div style={{ fontSize: 10, color: "#52525b", marginTop: 2 }}>Excluded</div>}
                         </div>
                       </div>
                     );
