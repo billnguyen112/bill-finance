@@ -796,12 +796,9 @@ export default function Dashboard() {
       const accRes = await fetch("/api/ibkr/accounts");
       const accounts = await accRes.json();
       if (!Array.isArray(accounts)) return;
-      setIbkrAccounts(accounts);
 
       // Get positions + summary for each account
       const allPositions = [];
-      let totalNav = 0;
-      let totalCash = 0;
       for (const acc of accounts) {
         try {
           const posRes = await fetch(`/api/ibkr/account/${acc.accountId}/positions`);
@@ -813,15 +810,12 @@ export default function Dashboard() {
         try {
           const sumRes = await fetch(`/api/ibkr/account/${acc.accountId}/summary`);
           const summary = await sumRes.json();
-          if (summary.netliquidation) {
-            totalNav += summary.netliquidation.amount || 0;
-            totalCash += (summary.totalcashvalue?.amount || 0);
-          }
-          if (!ibkrSummary) setIbkrSummary(summary);
+          acc._summary = summary; // attach per-account summary
         } catch {}
       }
+      setIbkrAccounts([...accounts]); // spread to trigger re-render
       setIbkrPositions(allPositions);
-      console.log(`[IBKR] ${accounts.length} accounts, ${allPositions.length} positions, NAV: £${totalNav.toFixed(2)}`);
+      console.log(`[IBKR] ${accounts.length} accounts, ${allPositions.length} positions`);
     } catch (err) {
       console.warn("[IBKR] Not available:", err.message);
       setIbkrConnected(false);
@@ -999,24 +993,25 @@ export default function Dashboard() {
 
   // Build IBKR account entries from live data
   const ibkrAccountEntries = useMemo(() => {
-    if (!ibkrConnected || ibkrAccounts.length === 0) {
-      return [{ name: "IBKR ISA", type: "Brokerage", balance: 7712.68, change: null, currency: "USD", provider: "IBKR" }];
-    }
+    if (!ibkrConnected || ibkrAccounts.length === 0) return [];
     return ibkrAccounts.map(acc => {
-      // Calculate NAV from positions for this account
+      // Use per-account position values (not global summary which doubles)
       const accPositions = ibkrPositions.filter(p => p.acctId === acc.accountId && p.position !== 0);
       const posValue = accPositions.reduce((s, p) => s + (p.mktValue || 0), 0);
+      // Find this account's summary from ibkrSummaries
+      const summary = acc._summary;
+      const nav = summary?.netliquidation?.amount || posValue;
       return {
         name: acc.accountAlias || acc.type || acc.accountId,
         type: acc.type === "ISA" ? "ISA" : "Brokerage",
-        balance: ibkrSummary?.netliquidation?.amount || posValue,
+        balance: nav,
         change: null,
         currency: acc.currency || "GBP",
         source: "ibkr",
         provider: "Interactive Brokers",
       };
     });
-  }, [ibkrConnected, ibkrAccounts, ibkrPositions, ibkrSummary]);
+  }, [ibkrConnected, ibkrAccounts, ibkrPositions]);
 
   const mergedAccounts = [
     ...ibkrAccountEntries,

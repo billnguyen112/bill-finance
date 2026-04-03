@@ -13,8 +13,16 @@ const TL_CLIENT_SECRET = process.env.TRUELAYER_CLIENT_SECRET
 const TL_REDIRECT_URI = 'http://localhost:3000/callback'
 const FRONTEND_URL = 'http://localhost:5173'
 
-// In-memory token store: access_token → refresh_token
-const tokenStore = new Map()
+// Persistent token store: access_token → refresh_token (survives server restarts)
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+const TOKEN_FILE = new URL('../.tl_tokens.json', import.meta.url).pathname
+let tokenStoreData = {}
+try { if (existsSync(TOKEN_FILE)) tokenStoreData = JSON.parse(readFileSync(TOKEN_FILE, 'utf8')); } catch {}
+const tokenStore = new Map(Object.entries(tokenStoreData))
+
+function persistTokens() {
+  try { writeFileSync(TOKEN_FILE, JSON.stringify(Object.fromEntries(tokenStore)), 'utf8'); } catch {}
+}
 
 // Step 1: Redirect user to TrueLayer to connect their bank
 app.get('/api/connect', (req, res) => {
@@ -45,6 +53,7 @@ app.get('/callback', async (req, res) => {
       // Store refresh token server-side (keyed by access token)
       if (data.refresh_token) {
         tokenStore.set(data.access_token, data.refresh_token)
+        persistTokens()
         console.log(`[TOKEN] Stored refresh token for new connection (expires in ${data.expires_in}s)`)
       }
       res.redirect(`${FRONTEND_URL}?tl_token=${encodeURIComponent(data.access_token)}`)
@@ -84,6 +93,7 @@ app.post('/api/refresh', async (req, res) => {
       if (data.refresh_token) {
         tokenStore.set(data.access_token, data.refresh_token)
       }
+      persistTokens()
       console.log(`[TOKEN] Refreshed successfully. New token expires in ${data.expires_in}s`)
       res.json({ access_token: data.access_token })
     } else {
@@ -101,6 +111,7 @@ app.post('/api/register-token', (req, res) => {
   const { accessToken, refreshToken } = req.body
   if (accessToken && refreshToken) {
     tokenStore.set(accessToken, refreshToken)
+    persistTokens()
     res.json({ ok: true })
   } else {
     res.status(400).json({ error: 'missing fields' })
