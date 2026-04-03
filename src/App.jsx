@@ -775,6 +775,7 @@ export default function Dashboard() {
   const [txCategoryFilter, setTxCategoryFilter] = useState(null);
   const [customMonth, setCustomMonth] = useState(new Date().getMonth());
   const [customYear, setCustomYear] = useState(new Date().getFullYear());
+  const [budgetPeriodOffset, setBudgetPeriodOffset] = useState(0); // 0 = current, -1 = last month, etc.
   const [selectedTx, setSelectedTx] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -1057,17 +1058,16 @@ export default function Dashboard() {
   const totalInvested = mergedAccounts.filter((a) => ["Brokerage", "ISA", "Private Equity", "Crypto"].includes(a.type)).reduce((s, a) => s + a.balance, 0);
   const totalCash = mergedAccounts.filter((a) => a.type === "Bank" || a.type === "Credit Card").reduce((s, a) => s + a.balance, 0);
 
-  // Budget period: 27th of last month to 27th of this month
+  // Budget period: 27th to 27th, with offset for navigating to past periods
   const budgetCutoff = useMemo(() => {
     const now = new Date();
     const day = now.getDate();
-    if (day >= 27) return new Date(now.getFullYear(), now.getMonth(), 27);
-    return new Date(now.getFullYear(), now.getMonth() - 1, 27);
-  }, []);
+    const baseMonth = day >= 27 ? now.getMonth() : now.getMonth() - 1;
+    return new Date(now.getFullYear(), baseMonth + budgetPeriodOffset, 27);
+  }, [budgetPeriodOffset]);
 
   const budgetEnd = useMemo(() => {
-    const c = new Date(budgetCutoff);
-    return new Date(c.getFullYear(), c.getMonth() + 1, 27);
+    return new Date(budgetCutoff.getFullYear(), budgetCutoff.getMonth() + 1, 27);
   }, [budgetCutoff]);
 
   const budgetPeriodLabel = useMemo(() => {
@@ -1077,9 +1077,9 @@ export default function Dashboard() {
   const periodTransactions = useMemo(() => {
     return allTransactions.filter((t) => {
       const d = t.timestamp ? new Date(t.timestamp) : parseTxDate(t.date);
-      return d >= budgetCutoff;
+      return d >= budgetCutoff && d < budgetEnd;
     });
-  }, [allTransactions, budgetCutoff]);
+  }, [allTransactions, budgetCutoff, budgetEnd]);
 
   const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
   const spending = useMemo(() => {
@@ -1577,11 +1577,20 @@ export default function Dashboard() {
       {/* ═══ BUDGET ═══ */}
       {activeTab === "budget" && (
         <div style={{ padding: "0 20px" }}>
-          {/* Period badge */}
-          <div style={{ padding: "20px 0 12px" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "rgba(99,102,241,0.1)", borderRadius: 20, fontSize: 13, color: "#818cf8", fontWeight: 500 }}>
+          {/* Period navigator */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 0 12px" }}>
+            <button onClick={() => setBudgetPeriodOffset(o => o - 1)}
+              style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "none", color: "#a1a1aa", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {"\u2039"}
+            </button>
+            <button onClick={() => setBudgetPeriodOffset(0)}
+              style={{ padding: "8px 20px", background: budgetPeriodOffset === 0 ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.06)", border: "none", borderRadius: 20, fontSize: 14, color: "#818cf8", fontWeight: 600, cursor: "pointer" }}>
               {budgetPeriodLabel}
-            </div>
+            </button>
+            <button onClick={() => setBudgetPeriodOffset(o => Math.min(o + 1, 0))}
+              style={{ width: 36, height: 36, borderRadius: "50%", background: budgetPeriodOffset === 0 ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)", border: "none", color: budgetPeriodOffset === 0 ? "#27272a" : "#a1a1aa", fontSize: 18, cursor: budgetPeriodOffset === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {"\u203A"}
+            </button>
           </div>
 
           {/* Donut chart */}
