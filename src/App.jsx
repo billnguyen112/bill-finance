@@ -587,7 +587,7 @@ function MerchantIcon({ merchant, rawMerchant, categoryId, size = 44 }) {
 const BANK_NAMES = /\b(wise|revolut|monzo|starling|chase\b|hsbc|barclays|natwest|lloyds|nationwide|santander|halifax|first\s*direct|metro\s*bank|virgin\s*money|atom\s*bank|tsb\b|rbs\b|clydesdale|yorkshire|co-?operative\s*bank|triodos|n26\b|bunq|tide\b|cashplus|pockit|loot\b|curve\b|plum\b|chip\b|moneybox|nutmeg|wealthify|pensionbee)\b/i;
 
 // Transaction description patterns that indicate transfers
-const TRANSFER_DESC = /transfer|faster\s*payment|standing\s*order|direct\s*debit\s*(to|from)|ft\s*-|fp\s*-|bacs\b|chaps\b|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|moving\s*money|internal|current\s*account|payment\s*(to|from)\s*(mr|ms|mrs|miss)|sent\s*from|emergency\s*fund|saver\b|payment\s*-\s*thank|\b\d{6}\s+\d{7,8}\b|internet\s*t|bnk\s|on\s*bns\s*saver|huu\s*nguyen|bill\s*nguyen/i;
+const TRANSFER_DESC = /transfer|faster\s*payment|standing\s*order|direct\s*debit\s*(to|from)|ft\s*-|fp\s*-|bacs\b|chaps\b|sort\s*code|account\s*(transfer|move)|own\s*account|savings?\s*(pot|goal|account)|pot\s|between\s*accounts|moving\s*money|internal|current\s*account|payment\s*(to|from)\s*(mr|ms|mrs|miss)|sent\s*from|emergency\s*fund|saver\b|payment\s*-\s*thank|\b\d{6}\s+\d{7,8}\b|internet\s*t|bnk\s|on\s*bns\s*saver|huu\s*nguyen|bill\s*nguyen|h\s*m\s*t\s*nguyen|tue\s*chase\s*current|my\s*revolut\s*sending|revolut\s*sending|cash\s*in\s*p\.?o/i;
 
 const SPENDING_RULES = [
   // Housing — very specific
@@ -605,15 +605,15 @@ const SPENDING_RULES = [
   // Subscriptions
   { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|cruxcapital|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium|chatgpt|claude|openai|anthropic|github|dropbox|1password|lastpass|nordvpn|express\s*vpn/i, categoryId: "subscriptions" },
   // Bills — only match specific utility/telecoms, NOT bank names
-  { pattern: /electric|gas\s*(bill|energy)|water\s*(bill|rate)|council\s*tax|internet\s*(bill|provider)|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin\s*media|bt\s*(broadband|sport|phone|mobile|group)|ee\s*(mobile|phone|ltd)|vodafone\s*(uk|bill|mobile)|three\s*(mobile|uk)|o2\s*(uk|mobile)|sky\s*(broadband|tv)|talktalk|british\s*gas|edf|eon|sse|octopus\s*energy|bulb|ovo\s*energy|scottish\s*power|thames\s*water|severn\s*trent|united\s*utilities|anglian\s*water/i, categoryId: "bills" },
+  { pattern: /electric|gas\s*(bill|energy)|water\s*(bill|rate)|council\s*tax|internet\s*(bill|provider)|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin\s*media|bt\s*(broadband|sport|phone|mobile|group)|ee\s*(mobile|phone|ltd)|vodafone\s*(uk|bill|mobile|ltd)?|three\s*(mobile|uk)|o2\s*(uk|mobile)|sky\s*(broadband|tv)|talktalk|british\s*gas|edf|eon|sse|octopus\s*energy|bulb|ovo\s*energy|scottish\s*power|thames\s*water|severn\s*trent|united\s*utilities|anglian\s*water/i, categoryId: "bills" },
   // Health
   { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|optician|specsaver|gym|fitness|health|puregym|david\s*lloyd|virgin\s*active|nuffield|bupa|eyes\s*on\s*broadway/i, categoryId: "personal_care" },
   // Family
-  { pattern: /family|transfer.*viet|remittance|wise.*vn|moneygram|western\s*union|world\s*remit/i, categoryId: "family" },
+  { pattern: /family|transfer.*viet|remittance|wise.*vn|wise\s*london|moneygram|western\s*union|world\s*remit/i, categoryId: "family" },
   // Travel
   { pattern: /flight|hotel|airbnb|booking\.com|expedia|travel|airport|airline|ryanair|easyjet|british\s*air|skyscanner|trivago|hostel|luggage/i, categoryId: "work_travel" },
   // Investment platforms (outgoing = investing)
-  { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube|nutmeg|wealthify|pensionbee|moneybox/i, categoryId: "investment" },
+  { pattern: /trading\s*212|t212|ibkr|interactive\s*broker|kraken|coinbase|binance|freetrade|vanguard|hargreaves|aj\s*bell|republic|seedrs|crowdcube|nutmeg|wealthify|pensionbee|moneybox|robinhood/i, categoryId: "investment" },
 ];
 
 // Income patterns
@@ -630,21 +630,22 @@ function categorize(merchantName, description, tlCategory, amount) {
   }
 
   // ── NEGATIVE amounts (money OUT) ──
-  // Priority order: Transfer detection → Spending rules → TL fallback
+  // Priority: Specific spending rules → Transfer detection → TL fallback
 
-  // 1. TrueLayer explicitly says TRANSFER → trust it
-  if (tlCategory === "TRANSFER") return "transfer";
-
-  // 2. Merchant name or description mentions a bank/fintech → transfer
-  if (BANK_NAMES.test(text)) return "transfer";
-
-  // 3. Description indicates transfer
-  if (TRANSFER_DESC.test(text)) return "transfer";
-
-  // 4. Spending category rules
+  // 1. Check specific spending rules FIRST (family, housing, eating_out, etc.)
+  //    This ensures "Wise London" matches family before BANK_NAMES catches "Wise"
   for (const rule of SPENDING_RULES) {
     if (rule.pattern.test(text)) return rule.categoryId;
   }
+
+  // 2. TrueLayer explicitly says TRANSFER → trust it
+  if (tlCategory === "TRANSFER") return "transfer";
+
+  // 3. Merchant name or description mentions a bank/fintech → transfer
+  if (BANK_NAMES.test(text)) return "transfer";
+
+  // 4. Description indicates transfer
+  if (TRANSFER_DESC.test(text)) return "transfer";
 
   // 5. TrueLayer category fallback
   if (tlCategory === "BILL_PAYMENT") return "bills";
@@ -658,8 +659,6 @@ function mapTx(tx, accountName) {
   const ts = new Date(tx.timestamp);
   const rawMerchant = tx.merchant_name || tx.description || "Unknown";
   const catId = categorize(rawMerchant, tx.description, tx.transaction_category, amount);
-  // Debug
-  console.log(`[${amount > 0 ? "IN" : "OUT"}] ${rawMerchant.substring(0, 35)} | £${Math.abs(amount).toFixed(2)} | TL_cat=${tx.transaction_category} | -> ${catId}`);
   return {
     id: `tl_${tx.transaction_id}`,
     date: ts.toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
@@ -947,15 +946,7 @@ export default function Dashboard() {
   }, [allTransactions, budgetCutoff]);
 
   const income = useMemo(() => periodTransactions.filter((t) => t.amount > 0 && !EXCLUDED_FROM_INCOME.includes(t.categoryId)).reduce((s, t) => s + t.amount, 0), [periodTransactions]);
-  const spending = useMemo(() => {
-    const spendTxns = periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
-    const total = spendTxns.reduce((s, t) => s + Math.abs(t.amount), 0);
-    // Debug: log spending breakdown
-    const excluded = periodTransactions.filter((t) => t.amount < 0 && EXCLUDED_FROM_SPENDING.includes(t.categoryId));
-    console.log(`[BUDGET] Period txns: ${periodTransactions.length} | Spending txns: ${spendTxns.length} (£${total.toFixed(2)}) | Excluded: ${excluded.length} (£${excluded.reduce((s,t) => s + Math.abs(t.amount), 0).toFixed(2)})`);
-    excluded.forEach(t => console.log(`  [EXCLUDED] ${t.merchant} | £${Math.abs(t.amount).toFixed(2)} | cat=${t.categoryId}`));
-    return total;
-  }, [periodTransactions]);
+  const spending = useMemo(() => periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId)).reduce((s, t) => s + Math.abs(t.amount), 0), [periodTransactions]);
   const netFlow = income - spending;
   const savingsRate = income > 0 ? Math.max(Math.min(Math.round(((income - spending) / income) * 100), 100), -100) : 0;
 
