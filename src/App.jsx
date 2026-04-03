@@ -971,18 +971,21 @@ export default function Dashboard() {
   const totalSpend = spending; // ALL spending in period, same as overview
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
   const committedCatIds = ["housing", "bills", "subscriptions", "family"];
-  // Committed = BUDGETED amounts for committed categories (what you expect to pay)
-  const committedBudget = budgetedCats.filter((c) => committedCatIds.includes(c.id)).reduce((s, c) => s + getBudget(c.id), 0);
-  // Variable spending = actual spending EXCLUDING committed category transactions
+  // Committed = ACTUAL spending in committed categories (not budget amounts)
+  const committedSpend = Object.entries(categorySpending)
+    .filter(([catId]) => committedCatIds.includes(catId))
+    .reduce((s, [, data]) => s + data.total, 0);
+  // Variable = ACTUAL spending in everything else
   const variableSpend = Object.entries(categorySpending)
     .filter(([catId]) => !committedCatIds.includes(catId))
     .reduce((s, [, data]) => s + data.total, 0);
+  // Verify: variableSpend + committedSpend should equal totalSpend (= spending from overview)
 
   // Days calculation
   const daysInPeriod = useMemo(() => Math.ceil((budgetEnd - budgetCutoff) / 86400000), [budgetCutoff, budgetEnd]);
   const dayOfPeriod = useMemo(() => Math.ceil((new Date() - budgetCutoff) / 86400000), [budgetCutoff]);
   const daysLeft = Math.max(daysInPeriod - dayOfPeriod, 1);
-  const dailyAllowance = Math.max((totalBudget - variableSpend - committedBudget) / daysLeft, 0);
+  const dailyAllowance = Math.max((totalBudget - totalSpend) / daysLeft, 0);
 
   const saveRecurring = (items) => { setRecurring(items); localStorage.setItem("recurring_items", JSON.stringify(items)); };
   const updateRecurringItem = (id, field, value) => {
@@ -1391,15 +1394,15 @@ export default function Dashboard() {
             <DonutChart
               segments={[
                 { value: variableSpend, color: "#818cf8" },
-                { value: committedBudget, color: "#c084fc" },
-                ...((totalBudget > variableSpend + committedBudget) ? [{ value: totalBudget - variableSpend - committedBudget, color: "rgba(255,255,255,0.04)" }] : []),
+                { value: committedSpend, color: "#c084fc" },
+                ...((totalBudget > variableSpend + committedSpend) ? [{ value: totalBudget - variableSpend - committedSpend, color: "rgba(255,255,255,0.04)" }] : []),
               ]}
               centerAmount={(() => {
-                const used = variableSpend + committedBudget;
+                const used = variableSpend + committedSpend;
                 return used > totalBudget ? `\u00A3${fmt(used - totalBudget)}` : `\u00A3${fmt(totalBudget - used)}`;
               })()}
               centerLabel={(() => {
-                const used = variableSpend + committedBudget;
+                const used = variableSpend + committedSpend;
                 return used > totalBudget ? "over budget" : `left of \u00A3${totalBudget.toLocaleString("en-GB")}`;
               })()}
               size={200}
@@ -1416,7 +1419,7 @@ export default function Dashboard() {
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#c084fc" }} />
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600 }}>Committed</div>
-                  <div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{fmt(committedBudget)}</div>
+                  <div style={{ fontSize: 12, color: "#71717a" }}>{"\u00A3"}{fmt(committedSpend)}</div>
                 </div>
               </div>
             </div>
