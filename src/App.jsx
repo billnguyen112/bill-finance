@@ -1373,9 +1373,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div style={{ display: "flex", gap: 16, marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Cost Basis</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{"\u00A3"}{totalCostBasis.toLocaleString("en-GB")}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Cost Basis</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{"\u00A3"}{totalCostBasis.toLocaleString("en-GB", {maximumFractionDigits: 0})}</div></div>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Cash</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{"\u00A3"}{(ibkrAccounts[0]?._summary?.totalcashvalue?.amount || 0).toLocaleString("en-GB", {minimumFractionDigits: 2})}</div></div>
               <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Return</div><div style={{ fontSize: 14, fontWeight: 600, color: totalPnlPct >= 0 ? "#34d399" : "#ef4444", marginTop: 2 }}>{totalPnlPct >= 0 ? "+" : ""}{totalPnlPct.toFixed(1)}%</div></div>
-              <div style={{ flex: 1 }}><div style={{ fontSize: 11, color: "#71717a" }}>Positions</div><div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{holdings.length}</div></div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
