@@ -1001,27 +1001,35 @@ export default function Dashboard() {
   const budgetedCats = CATEGORIES.filter((c) => getBudget(c.id) > 0 && !EXCLUDED_FROM_SPENDING.includes(c.id));
   const totalBudget = budgetedCats.reduce((s, c) => s + getBudget(c.id), 0);
   const recurringTotal = recurring.reduce((s, r) => s + r.amount, 0);
-  const committedCatIds = ["housing", "bills", "subscriptions"];
-  // Committed = ACTUAL spending in committed categories (matches overview)
-  const committedSpend = Object.entries(categorySpending)
-    .filter(([catId]) => committedCatIds.includes(catId))
-    .reduce((s, [, data]) => s + data.total, 0);
-  // Variable = ACTUAL spending in non-committed categories
-  const variableSpend = Object.entries(categorySpending)
-    .filter(([catId]) => !committedCatIds.includes(catId))
-    .reduce((s, [, data]) => s + data.total, 0);
-  // Note: variableSpend + committedSpend === spending (always)
-  // Budget for variable = total budget minus committed category budgets
-  const committedBudgetAmount = budgetedCats
-    .filter(c => committedCatIds.includes(c.id))
-    .reduce((s, c) => s + getBudget(c.id), 0);
-  const variableBudget = totalBudget - committedBudgetAmount;
 
-  // Days calculation
+  // Committed = UNPAID recurring items (check which ones have been paid this period)
+  const committedSpend = useMemo(() => {
+    return recurring.reduce((total, r) => {
+      // Check if this recurring item has a matching transaction in the period
+      const merchantLower = r.merchant.toLowerCase();
+      const paid = periodTransactions.some((t) => {
+        if (t.amount >= 0) return false; // only debits
+        const txMerchant = (t.rawMerchant || t.merchant || "").toLowerCase();
+        const amountMatch = Math.abs(Math.abs(t.amount) - r.amount) < 1; // within £1
+        const nameMatch = merchantLower.split(" ").some(word => word.length > 3 && txMerchant.includes(word));
+        return amountMatch && nameMatch;
+      });
+      if (!paid) return total + r.amount;
+      return total;
+    }, 0);
+  }, [recurring, periodTransactions]);
+
+  // Spending = ALL actual spending (overview number)
+  // Variable spending = spending minus what's already been paid from recurring
+  const paidRecurring = recurringTotal - committedSpend;
+  const variableSpend = spending - paidRecurring;
+
+  // Daily allowance = (total budget - committed - variable spent) / days left
   const daysInPeriod = useMemo(() => Math.ceil((budgetEnd - budgetCutoff) / 86400000), [budgetCutoff, budgetEnd]);
   const dayOfPeriod = useMemo(() => Math.ceil((new Date() - budgetCutoff) / 86400000), [budgetCutoff]);
   const daysLeft = Math.max(daysInPeriod - dayOfPeriod, 1);
-  const dailyAllowance = Math.max((variableBudget - variableSpend) / daysLeft, 0);
+  const budgetLeft = totalBudget - committedSpend - variableSpend;
+  const dailyAllowance = Math.max(budgetLeft / daysLeft, 0);
 
   const saveRecurring = (items) => { setRecurring(items); localStorage.setItem("recurring_items", JSON.stringify(items)); };
   const updateRecurringItem = (id, field, value) => {
