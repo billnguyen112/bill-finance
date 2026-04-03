@@ -976,10 +976,15 @@ export default function Dashboard() {
   const spending = useMemo(() => {
     const s = periodTransactions.filter((t) => t.amount < 0 && !EXCLUDED_FROM_SPENDING.includes(t.categoryId));
     const total = s.reduce((sum, t) => sum + Math.abs(t.amount), 0);
-    // Debug breakdown by category
+    // Debug: every single spending transaction
     const cats = {};
-    s.forEach(t => { cats[t.categoryId] = (cats[t.categoryId] || 0) + Math.abs(t.amount); });
-    console.log(`[SPENDING] £${total.toFixed(2)} from ${s.length} txns | ` + Object.entries(cats).sort((a,b) => b[1]-a[1]).map(([k,v]) => `${k}: £${v.toFixed(2)}`).join(", "));
+    s.forEach(t => {
+      cats[t.categoryId] = (cats[t.categoryId] || 0) + Math.abs(t.amount);
+    });
+    console.log(`[SPENDING] £${total.toFixed(2)} from ${s.length} txns`);
+    Object.entries(cats).sort((a,b) => b[1]-a[1]).forEach(([k,v]) => console.log(`  ${k}: £${v.toFixed(2)}`));
+    // Log each transaction for full audit
+    s.forEach(t => console.log(`  [TXN] ${t.merchant} | £${Math.abs(t.amount).toFixed(2)} | ${t.categoryId} | ${t.accountName || "?"} | ${t.date}`));
     return total;
   }, [periodTransactions]);
   const netFlow = income - spending;
@@ -1004,19 +1009,20 @@ export default function Dashboard() {
 
   // Committed = UNPAID recurring items (check which ones have been paid this period)
   const committedSpend = useMemo(() => {
-    return recurring.reduce((total, r) => {
-      // Check if this recurring item has a matching transaction in the period
-      const merchantLower = r.merchant.toLowerCase();
+    let unpaidTotal = 0;
+    recurring.forEach((r) => {
+      const merchantWords = r.merchant.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
       const paid = periodTransactions.some((t) => {
-        if (t.amount >= 0) return false; // only debits
-        const txMerchant = (t.rawMerchant || t.merchant || "").toLowerCase();
-        const amountMatch = Math.abs(Math.abs(t.amount) - r.amount) < 1; // within £1
-        const nameMatch = merchantLower.split(" ").some(word => word.length > 3 && txMerchant.includes(word));
-        return amountMatch && nameMatch;
+        if (t.amount >= 0) return false;
+        const txText = `${t.rawMerchant || ""} ${t.merchant || ""}`.toLowerCase();
+        const nameMatch = merchantWords.some(word => txText.includes(word));
+        return nameMatch;
       });
-      if (!paid) return total + r.amount;
-      return total;
-    }, 0);
+      console.log(`[RECURRING] ${r.merchant} £${r.amount} → ${paid ? "PAID" : "UNPAID"}`);
+      if (!paid) unpaidTotal += r.amount;
+    });
+    console.log(`[COMMITTED] Total unpaid: £${unpaidTotal.toFixed(2)}`);
+    return unpaidTotal;
   }, [recurring, periodTransactions]);
 
   // Spending = ALL actual spending (overview number)
