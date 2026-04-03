@@ -1515,7 +1515,7 @@ export default function Dashboard() {
                   onClick={() => !editingBudget && spent > 0 && (() => { setDrillCategory(cat.id); setDrillSource("budget"); })()}
                   style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.03)", cursor: spent > 0 && !editingBudget ? "pointer" : "default" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CategorySvg id={cat.id} color={cat.color} size={18} /></div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontSize: 14, fontWeight: 600 }}>{cat.label}</span>
@@ -1759,7 +1759,7 @@ export default function Dashboard() {
                   <div key={cat.id} onClick={() => { setDrillCategory(cat.id); setDrillSource("analytics"); }}
                     style={{ padding: "14px 16px", borderBottom: i < sortedCats.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none", cursor: "pointer" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.icon}</div>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><CategorySvg id={cat.id} color={cat.color} size={18} /></div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontSize: 14, fontWeight: 500 }}>{cat.label}</span>
@@ -1846,7 +1846,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 12, color: "#52525b", letterSpacing: "0.05em", fontWeight: 500, marginBottom: 10 }}>INSIGHTS</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                 <div style={{ ...card, padding: 14, display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ fontSize: 24 }}>{sortedCats[0].icon}</div>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${sortedCats[0].color}18`, display: "flex", alignItems: "center", justifyContent: "center" }}><CategorySvg id={sortedCats[0].id} color={sortedCats[0].color} size={18} /></div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>Biggest category</div>
                     <div style={{ fontSize: 12, color: "#71717a", marginTop: 2 }}>
@@ -1871,7 +1871,7 @@ export default function Dashboard() {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "#ef4444" }}>Over budget</div>
                       <div style={{ fontSize: 12, color: "#71717a", marginTop: 2 }}>
-                        {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).map((c) => `${c.icon} ${c.label}`).join(", ")}
+                        {sortedCats.filter((c) => getBudget(c.id) > 0 && catMap[c.id].total > getBudget(c.id)).map((c) => c.label).join(", ")}
                       </div>
                     </div>
                   </div>
@@ -1944,7 +1944,7 @@ export default function Dashboard() {
           <BottomSheet onClose={() => setDrillCategory(null)}>
             {/* Header */}
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
-              <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${cat.color}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{cat.icon}</div>
+              <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${cat.color}18`, display: "flex", alignItems: "center", justifyContent: "center" }}><CategorySvg id={cat.id} color={cat.color} size={24} /></div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 20, fontWeight: 700 }}>{cat.label}</div>
                 <div style={{ fontSize: 13, color: "#71717a" }}>{catTxns.length} transaction{catTxns.length !== 1 ? "s" : ""}</div>
