@@ -179,14 +179,17 @@ function BarChart({ income, spending, maxVal }) {
 function CategoryPicker({ onSelect, onClose }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ width: "100%", maxWidth: 430, background: "#18181b", borderRadius: "20px 20px 0 0", padding: "20px 20px 30px", maxHeight: "60vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ width: "100%", maxWidth: 430, background: "#131320", borderRadius: "20px 20px 0 0", padding: "16px 20px 32px", maxHeight: "60vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ width: 40, height: 4, background: "rgba(255,255,255,0.2)", borderRadius: 2, margin: "0 auto 16px" }} />
-        <div style={{ fontSize: 16, fontWeight: 600, textAlign: "center", marginBottom: 16 }}>Choose category</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, textAlign: "center", marginBottom: 20 }}>Category</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {CATEGORIES.map((cat) => (
             <button key={cat.id} onClick={() => onSelect(cat.id)}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, cursor: "pointer", color: "#e4e4e7", fontSize: 13, textAlign: "left" }}>
-              <span style={{ fontSize: 18 }}>{cat.icon}</span><span>{cat.label}</span>
+              style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", background: "none", border: "none", borderRadius: 12, cursor: "pointer", color: "#e4e4e7", fontSize: 15, textAlign: "left", width: "100%" }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: cat.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: 14, height: 14, borderRadius: "50%", background: "rgba(255,255,255,0.3)" }} />
+              </div>
+              <span style={{ fontWeight: 500 }}>{cat.label}</span>
             </button>
           ))}
         </div>
@@ -427,8 +430,8 @@ const MERCHANT_DISPLAY = [
   { p: /\bgross\s*interest/i, name: "Bank Interest" },
   { p: /\bemergency\s*fund/i, name: "Emergency Fund" },
   { p: /\bpayment\s*-?\s*thank/i, name: "Card Payment" },
+  { p: /\bcruxcapital/i, name: "Cruxcapital Substack" },
   { p: /\bsubstack/i, name: "Substack" },
-  { p: /\bcruxcapital/i, name: "Cruxcapital" },
   { p: /\bregal\s*gaming/i, name: "Regal Gaming" },
   { p: /\bowl\s*and\s*hitchhiker/i, name: "Owl & Hitchhiker" },
   { p: /\bsalad\s*projects/i, name: "Salad Projects" },
@@ -1328,7 +1331,7 @@ export default function Dashboard() {
                             <span style={{ fontSize: 15, fontWeight: 500, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</span>
                             {tx.pending && <span style={{ fontSize: 9, fontWeight: 600, color: "#fbbf24", background: "rgba(251,191,36,0.12)", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>PENDING</span>}
                           </div>
-                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time || cat.label}</div>
+                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time ? `${time} \u00B7 ${cat.label}` : cat.label}</div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
                           <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7" }}>
