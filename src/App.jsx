@@ -240,7 +240,6 @@ const MERCHANT_LOGO_RULES = [
   { p: /\bcaffe\s*nero/i, d: "caffenero.com" },
   { p: /\bwingstop/i, d: "wingstop.co.uk" },
   { p: /\bpopeyes/i, d: "popeyes.co.uk" },
-  { p: /\bnoodle|ramen/i, d: "wagamama.com" },
   { p: /\bfrankie/i, d: "frankieandbennys.com" },
   // Groceries
   { p: /\btesco/i, d: "tesco.com" },
@@ -258,8 +257,8 @@ const MERCHANT_LOGO_RULES = [
   // Transport
   { p: /\btfl\b/i, d: "tfl.gov.uk" },
   { p: /\buber\b(?!\s*eat)/i, d: "uber.com" },
-  { p: /\bbolt\b/i, d: "bolt.eu" },
-  { p: /\blime\b/i, d: "li.me" },
+  { p: /\bbolt\s*(ride|taxi|trip)/i, d: "bolt.eu" },
+  { p: /\blime\s*(scooter|bike|ride)/i, d: "li.me" },
   { p: /\btrainline/i, d: "thetrainline.com" },
   { p: /\bshell\b/i, d: "shell.co.uk" },
   { p: /\bbp\b/i, d: "bp.com" },
@@ -283,7 +282,7 @@ const MERCHANT_LOGO_RULES = [
   { p: /\bboots\b/i, d: "boots.com" },
   { p: /\bsuperdrug/i, d: "superdrug.com" },
   { p: /\btk\s*maxx/i, d: "tkmaxx.com" },
-  { p: /\bnext\b/i, d: "next.co.uk" },
+  { p: /\bnext\s*(retail|store|plc|direct)/i, d: "next.co.uk" },
   { p: /\bselfridges/i, d: "selfridges.com" },
   { p: /\bharrods/i, d: "harrods.com" },
   // Entertainment & Subscriptions
@@ -366,7 +365,7 @@ const MERCHANT_LOGO_RULES = [
   // Other
   { p: /\brightmove/i, d: "rightmove.co.uk" },
   { p: /\bzoopla/i, d: "zoopla.co.uk" },
-  { p: /\bhonest\b/i, d: "honestburgers.co.uk" },
+  { p: /\bhonest\s*(burger|group|limited|ltd)/i, d: "honestburgers.co.uk" },
 ];
 
 // Cache for broken logo URLs to avoid retrying
@@ -404,7 +403,7 @@ const MERCHANT_DISPLAY = [
   { p: /\bplaystation/i, name: "PlayStation" },
   { p: /\bmarugame/i, name: "Marugame Udon" },
   { p: /\bdishoom/i, name: "Dishoom" },
-  { p: /\bhonest\b/i, name: "Honest Burgers" },
+  { p: /\bhonest\s*(burger|group|limited|ltd)/i, name: "Honest Burgers" },
   { p: /\bleon\b/i, name: "Leon" },
   { p: /\bodeon/i, name: "Odeon" },
   { p: /\bpret\b/i, name: "Pret A Manger" },
