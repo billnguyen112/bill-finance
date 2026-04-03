@@ -16,16 +16,16 @@ const HOLDINGS = [
 ];
 
 const CATEGORIES = [
-  { id: "housing", label: "Housing", icon: "\u{1F3E0}", color: "#818cf8", budget: 1050 },
   { id: "family", label: "Family", icon: "\u{1F468}\u200D\u{1F469}\u200D\u{1F466}", color: "#34d399", budget: 245 },
+  { id: "personal_care", label: "Personal Care", icon: "\u{2764}\uFE0F", color: "#f472b6", budget: 19 },
   { id: "eating_out", label: "Eating Out", icon: "\u{1F37D}\uFE0F", color: "#22d3ee", budget: 400 },
-  { id: "groceries", label: "Groceries", icon: "\u{1F6D2}", color: "#4ade80", budget: 120 },
-  { id: "transport", label: "Transport", icon: "\u{1F687}", color: "#60a5fa", budget: 80 },
-  { id: "shopping", label: "Shopping", icon: "\u{1F6CD}\uFE0F", color: "#f0abfc", budget: 50 },
-  { id: "entertainment", label: "Entertainment", icon: "\u{1F3AC}", color: "#fbbf24", budget: 50 },
-  { id: "bills", label: "Bills", icon: "\u{1F4A1}", color: "#fb923c", budget: 30 },
+  { id: "entertainment", label: "Entertainment", icon: "\u{1F3AC}", color: "#a855f7", budget: 15 },
+  { id: "bills", label: "Bills", icon: "\u{1F4A1}", color: "#fb923c", budget: 24 },
+  { id: "transport", label: "Transport", icon: "\u{1F697}", color: "#ef4444", budget: 30 },
+  { id: "shopping", label: "Shopping", icon: "\u{1F6CD}\uFE0F", color: "#818cf8", budget: 8 },
+  { id: "groceries", label: "Groceries", icon: "\u{1F6D2}", color: "#14b8a6", budget: 120 },
+  { id: "housing", label: "Housing", icon: "\u{1F3E0}", color: "#6366f1", budget: 1050 },
   { id: "subscriptions", label: "Subscriptions", icon: "\u{1F4FA}", color: "#c084fc", budget: 30 },
-  { id: "health", label: "Health", icon: "\u{1F48A}", color: "#f87171", budget: 40 },
   { id: "income", label: "Income", icon: "\u{1F4B0}", color: "#34d399", budget: 0 },
   { id: "work_travel", label: "Work Travel", icon: "\u2708\uFE0F", color: "#38bdf8", budget: 0 },
   { id: "transfer", label: "Transfer", icon: "\u{1F504}", color: "#71717a", budget: 0 },
@@ -245,6 +245,8 @@ const MERCHANT_LOGO_RULES = [
   { p: /\bwingstop/i, d: "wingstop.co.uk" },
   { p: /\bpopeyes/i, d: "popeyes.co.uk" },
   { p: /\bfrankie/i, d: "frankieandbennys.com" },
+  { p: /\bsimmons\s*bar/i, d: "simmonsbar.co.uk" },
+  { p: /\baxa\b/i, d: "axa.co.uk" },
   // Groceries
   { p: /\btesco/i, d: "tesco.com" },
   { p: /\bsainsbury/i, d: "sainsburys.co.uk" },
@@ -315,6 +317,8 @@ const MERCHANT_LOGO_RULES = [
   { p: /\b1password/i, d: "1password.com" },
   { p: /\bnordvpn/i, d: "nordvpn.com" },
   { p: /\bsky\b/i, d: "sky.com" },
+  { p: /\bsubstack/i, d: "substack.com" },
+  { p: /\bcruxcapital/i, d: "cruxcapital.com" },
   // Bills / Telecoms
   { p: /\bvirgin\s*media/i, d: "virginmedia.com" },
   { p: /\bbt\s*(broadband|sport|group|phone|mobile)/i, d: "bt.com" },
@@ -423,6 +427,15 @@ const MERCHANT_DISPLAY = [
   { p: /\bgross\s*interest/i, name: "Bank Interest" },
   { p: /\bemergency\s*fund/i, name: "Emergency Fund" },
   { p: /\bpayment\s*-?\s*thank/i, name: "Card Payment" },
+  { p: /\bsubstack/i, name: "Substack" },
+  { p: /\bcruxcapital/i, name: "Cruxcapital" },
+  { p: /\bregal\s*gaming/i, name: "Regal Gaming" },
+  { p: /\bowl\s*and\s*hitchhiker/i, name: "Owl & Hitchhiker" },
+  { p: /\bsalad\s*projects/i, name: "Salad Projects" },
+  { p: /\bsimmons\s*bar/i, name: "Simmons Bar" },
+  { p: /\blanzhou/i, name: "Lanzhou Lamian Noodle" },
+  { p: /\baxa\b/i, name: "AXA" },
+  { p: /\beyes\s*on\s*broadway/i, name: "Eyes on Broadway" },
 ];
 
 // Clean up messy TrueLayer merchant names for display
@@ -560,11 +573,11 @@ const SPENDING_RULES = [
   // Entertainment
   { pattern: /netflix|spotify|disney|cinema|odeon|cineworld|vue|gaming|playstation|xbox|steam|twitch|youtube|apple\s*tv|prime\s*video|sky\s*(tv|go)|now\s*tv|theatre|concert|ticket|gig\s|event|bowling|laser|escape\s*room/i, categoryId: "entertainment" },
   // Subscriptions
-  { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium|chatgpt|claude|openai|anthropic|github|dropbox|1password|lastpass|nordvpn|express\s*vpn/i, categoryId: "subscriptions" },
+  { pattern: /subscri|membership|annual\s*fee|monthly\s*fee|patreon|substack|cruxcapital|notion|figma|adobe|microsoft\s*365|icloud|google\s*one|emma\b|monzo\s*plus|revolut\s*premium|chatgpt|claude|openai|anthropic|github|dropbox|1password|lastpass|nordvpn|express\s*vpn/i, categoryId: "subscriptions" },
   // Bills — only match specific utility/telecoms, NOT bank names
   { pattern: /electric|gas\s*(bill|energy)|water\s*(bill|rate)|council\s*tax|internet\s*(bill|provider)|broadband|phone\s*bill|mobile\s*bill|insurance|tv\s*licen|virgin\s*media|bt\s*(broadband|sport|phone|mobile|group)|ee\s*(mobile|phone|ltd)|vodafone\s*(uk|bill|mobile)|three\s*(mobile|uk)|o2\s*(uk|mobile)|sky\s*(broadband|tv)|talktalk|british\s*gas|edf|eon|sse|octopus\s*energy|bulb|ovo\s*energy|scottish\s*power|thames\s*water|severn\s*trent|united\s*utilities|anglian\s*water/i, categoryId: "bills" },
   // Health
-  { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|optician|specsaver|gym|fitness|health|puregym|david\s*lloyd|virgin\s*active|nuffield|bupa/i, categoryId: "health" },
+  { pattern: /pharmacy|chemist|doctor|dentist|hospital|optical|optician|specsaver|gym|fitness|health|puregym|david\s*lloyd|virgin\s*active|nuffield|bupa|eyes\s*on\s*broadway/i, categoryId: "personal_care" },
   // Family
   { pattern: /family|transfer.*viet|remittance|wise.*vn|moneygram|western\s*union|world\s*remit/i, categoryId: "family" },
   // Travel
