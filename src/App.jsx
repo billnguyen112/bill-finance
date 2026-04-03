@@ -987,7 +987,8 @@ export default function Dashboard() {
     s.forEach(t => console.log(`  [TXN] ${t.merchant} | £${Math.abs(t.amount).toFixed(2)} | ${t.categoryId} | ${t.accountName || "?"} | ${t.date}`));
     return total;
   }, [periodTransactions]);
-  const netFlow = income - spending;
+  const netFlow = income - spending; // raw net (used for internal calcs)
+  // Savings rate based on actual outflows vs income
   const savingsRate = income > 0 ? Math.max(Math.min(Math.round(((income - spending) / income) * 100), 100), -100) : 0;
 
   MONTHLY_SAVINGS[MONTHLY_SAVINGS.length - 1].rate = savingsRate;
@@ -1201,11 +1202,11 @@ export default function Dashboard() {
             </div>
             <div style={{ ...card, flex: 1, textAlign: "center", padding: "16px 8px" }}>
               <div style={{ fontSize: 11, color: "#71717a" }}>Spending</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#f472b6", marginTop: 6 }}>-{"\u00A3"}{fmt(spending)}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#f472b6", marginTop: 6 }}>-{"\u00A3"}{fmt(variableSpend)}</div>
             </div>
             <div style={{ ...card, flex: 1, textAlign: "center", padding: "16px 8px" }}>
               <div style={{ fontSize: 11, color: "#71717a" }}>Saved</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: netFlow >= 0 ? "#34d399" : "#ef4444", marginTop: 6 }}>{netFlow >= 0 ? "+" : ""}{"\u00A3"}{fmt(netFlow)}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: (income - variableSpend - committedSpend) >= 0 ? "#34d399" : "#ef4444", marginTop: 6 }}>{(income - variableSpend - committedSpend) >= 0 ? "+" : ""}{"\u00A3"}{fmt(income - variableSpend - committedSpend)}</div>
             </div>
           </div>
 
