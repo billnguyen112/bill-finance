@@ -782,7 +782,7 @@ export default function Dashboard() {
   const [ibkrConnected, setIbkrConnected] = useState(false);
   const [ibkrAccounts, setIbkrAccounts] = useState([]);
   const [ibkrPositions, setIbkrPositions] = useState([]);
-  const [ibkrSummary, setIbkrSummary] = useState(null);
+  const [ibkrFxRates, setIbkrFxRates] = useState({ USD: 0.756, EUR: 0.872, SEK: 0.080, GBP: 1 });
 
   // IBKR: check connection and load data
   const loadIbkrData = useCallback(async () => {
@@ -813,7 +813,18 @@ export default function Dashboard() {
           acc._summary = summary; // attach per-account summary
         } catch {}
       }
-      setIbkrAccounts([...accounts]); // spread to trigger re-render
+      // Get FX rates from ledger
+      try {
+        const ledgerRes = await fetch(`/api/ibkr/account/${accounts[0].accountId}/ledger`);
+        const ledger = await ledgerRes.json();
+        const rates = {};
+        for (const [ccy, data] of Object.entries(ledger)) {
+          if (data && data.exchangerate) rates[ccy] = data.exchangerate;
+        }
+        if (Object.keys(rates).length > 0) setIbkrFxRates(prev => ({ ...prev, ...rates }));
+      } catch {}
+
+      setIbkrAccounts([...accounts]);
       setIbkrPositions(allPositions);
       console.log(`[IBKR] ${accounts.length} accounts, ${allPositions.length} positions`);
     } catch (err) {
@@ -1137,27 +1148,32 @@ export default function Dashboard() {
   };
 
   // Holdings
-  // Holdings from IBKR live positions
+  // Holdings from IBKR live positions — all values converted to GBP
   const holdings = useMemo(() => {
     if (ibkrPositions.length === 0) return [];
     return ibkrPositions.map(p => {
       const costBasis = p.avgCost * p.position;
       const pnlPct = costBasis > 0 ? ((p.mktValue - costBasis) / costBasis * 100) : 0;
+      const fxRate = ibkrFxRates[p.currency] || 1;
       return {
         ticker: p.contractDesc,
         name: IBKR_NAMES[p.contractDesc] || p.contractDesc,
-        value: p.mktValue,
-        costBasis,
+        value: p.mktValue * fxRate, // GBP
+        valueLocal: p.mktValue,
+        costBasis: costBasis * fxRate, // GBP
+        costBasisLocal: costBasis,
         pnl: pnlPct,
-        unrealizedPnl: p.unrealizedPnl,
+        unrealizedPnl: (p.unrealizedPnl || 0) * fxRate, // GBP
+        unrealizedPnlLocal: p.unrealizedPnl || 0,
         currency: p.currency,
+        fxRate,
         position: p.position,
         mktPrice: p.mktPrice,
         avgCost: p.avgCost,
         account: p.accountAlias || "IBKR",
       };
     });
-  }, [ibkrPositions]);
+  }, [ibkrPositions, ibkrFxRates]);
 
   const totalCurrentValue = holdings.reduce((s, h) => s + h.value, 0);
   const totalCostBasis = holdings.reduce((s, h) => s + h.costBasis, 0);
@@ -1397,12 +1413,12 @@ export default function Dashboard() {
                     {ibkrConnected && <span style={{ fontSize: 9, padding: "2px 6px", background: "rgba(52,211,153,0.12)", color: "#34d399", borderRadius: 4, fontWeight: 600 }}>LIVE</span>}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Value</div><div style={{ fontSize: 13, fontWeight: 600 }}>{sym}{h.value.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div></div>
+                    <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Value</div><div style={{ fontSize: 13, fontWeight: 600 }}>{"\u00A3"}{h.value.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div><div style={{ fontSize: 10, color: "#3f3f46" }}>{sym}{(h.valueLocal || 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</div></div>
                     <div><div style={{ fontSize: 10, color: "#3f3f46" }}>Avg Cost</div><div style={{ fontSize: 13, fontWeight: 500, color: "#71717a" }}>{sym}{h.avgCost?.toFixed(2) || "?"}</div></div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 10, color: "#3f3f46" }}>P&L</div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: pnlAbs >= 0 ? "#34d399" : "#ef4444" }}>
-                        {pnlAbs >= 0 ? "+" : ""}{sym}{Math.abs(pnlAbs).toFixed(2)} ({h.pnl >= 0 ? "+" : ""}{h.pnl.toFixed(1)}%)
+                        {pnlAbs >= 0 ? "+" : "-"}{"\u00A3"}{Math.abs(pnlAbs).toFixed(2)} ({h.pnl >= 0 ? "+" : ""}{h.pnl.toFixed(1)}%)
                       </div>
                     </div>
                   </div>
