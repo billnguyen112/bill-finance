@@ -1026,12 +1026,10 @@ export default function Dashboard() {
     return unpaidTotal;
   }, [recurring, periodTransactions]);
 
-  // Spending = ALL actual spending (overview number)
-  // Variable spending = spending minus what's already been paid from recurring
-  const paidRecurring = recurringTotal - committedSpend;
-  const variableSpend = spending - paidRecurring;
+  // Spending = ALL actual spend this period (paid recurring + discretionary)
+  const variableSpend = spending;
 
-  // Daily allowance = (total budget - committed - variable spent) / days left
+  // Daily allowance = (total budget - committed unpaid - actual spending) / days left
   const daysInPeriod = useMemo(() => Math.ceil((budgetEnd - budgetCutoff) / 86400000), [budgetCutoff, budgetEnd]);
   const dayOfPeriod = useMemo(() => Math.ceil((new Date() - budgetCutoff) / 86400000), [budgetCutoff]);
   const daysLeft = Math.max(daysInPeriod - dayOfPeriod, 1);
