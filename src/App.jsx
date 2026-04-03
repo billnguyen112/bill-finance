@@ -425,8 +425,8 @@ function getMerchantLogo(merchantName, rawMerchant) {
   return null;
 }
 
-// Logo component with fallback chain: icon.horse → Google favicon → letter
-function MerchantIcon({ merchant, rawMerchant, categoryId, size = 40 }) {
+// Logo component with fallback chain: icon.horse → Google favicon → styled letter
+function MerchantIcon({ merchant, rawMerchant, categoryId, size = 44 }) {
   const [errorCount, setErrorCount] = useState(0);
   const logoUrl = useMemo(() => getMerchantLogo(merchant, rawMerchant), [merchant, rawMerchant]);
   const cat = getCat(categoryId);
@@ -440,12 +440,16 @@ function MerchantIcon({ merchant, rawMerchant, categoryId, size = 40 }) {
 
   const googleFavicon = domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : null;
 
-  // errorCount: 0 = try icon.horse, 1 = try google favicon, 2 = show letter
+  // errorCount: 0 = try icon.horse, 1 = try google favicon, 2+ = letter
   const currentUrl = errorCount === 0 ? logoUrl : errorCount === 1 ? googleFavicon : null;
 
   if (currentUrl) {
     return (
-      <div style={{ width: size, height: size, borderRadius: size / 2, overflow: "hidden", flexShrink: 0, background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.06)" }}>
+      <div style={{
+        width: size, height: size, borderRadius: size / 2, overflow: "hidden", flexShrink: 0,
+        background: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
         <img
           src={currentUrl}
           alt=""
@@ -459,14 +463,14 @@ function MerchantIcon({ merchant, rawMerchant, categoryId, size = 40 }) {
     );
   }
 
-  // Final fallback: colored circle with first letter
+  // Final fallback: colored circle with first letter (Revolut style)
   const initial = (merchant || "?").replace(/^[^a-zA-Z]*/, "").charAt(0).toUpperCase() || "?";
   return (
     <div style={{
       width: size, height: size, borderRadius: size / 2, flexShrink: 0,
-      background: `${cat.color}15`,
+      background: cat.color,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: size * 0.4, fontWeight: 700, color: cat.color,
+      fontSize: size * 0.4, fontWeight: 700, color: "#fff",
     }}>
       {initial}
     </div>
@@ -1104,69 +1108,82 @@ export default function Dashboard() {
 
         return (
         <div style={{ padding: "0 20px" }}>
-          {/* Search bar */}
-          <div style={{ display: "flex", gap: 8, marginTop: 16, marginBottom: 12 }}>
-            <div style={{ flex: 1, position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#3f3f46", fontSize: 14 }}>{"\u{1F50D}"}</span>
-              <input placeholder="Search transactions..." value={txSearch} onChange={(e) => setTxSearch(e.target.value)}
-                style={{ width: "100%", padding: "11px 10px 11px 38px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, color: "#e4e4e7", fontSize: 14, outline: "none" }} />
+          {/* Header */}
+          <div style={{ fontSize: 26, fontWeight: 800, padding: "20px 0 4px", letterSpacing: "-0.02em" }}>Transactions</div>
+
+          {/* Search bar — clean Revolut style */}
+          <div style={{ marginTop: 16, marginBottom: 20 }}>
+            <div style={{ position: "relative" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#52525b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }}>
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+              </svg>
+              <input placeholder="Search" value={txSearch} onChange={(e) => setTxSearch(e.target.value)}
+                style={{ width: "100%", padding: "12px 12px 12px 42px", background: "rgba(255,255,255,0.05)", border: "none", borderRadius: 14, color: "#e4e4e7", fontSize: 15, outline: "none" }} />
+              {/* Filter buttons */}
+              <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", display: "flex", gap: 4 }}>
+                {txCategoryFilter && (
+                  <button onClick={() => setTxCategoryFilter(null)}
+                    style={{ padding: "4px 10px", fontSize: 11, border: "none", borderRadius: 8, cursor: "pointer",
+                      background: `${getCat(txCategoryFilter).color}20`, color: getCat(txCategoryFilter).color, fontWeight: 600 }}>
+                    {getCat(txCategoryFilter).icon} {"\u2715"}
+                  </button>
+                )}
+                <button onClick={() => setShowAccountFilter(true)}
+                  style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, color: "#52525b" }}>
+                  {"\u{1F3E6}"}
+                </button>
+              </div>
             </div>
-            <button onClick={() => setShowAccountFilter(true)}
-              style={{ width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, cursor: "pointer", fontSize: 16, color: selectedAccounts && selectedAccounts.length > 0 ? "#818cf8" : "#52525b" }}>
-              {"\u{1F3E6}"}
-            </button>
           </div>
 
-          {/* Category filter chips */}
-          <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto", paddingBottom: 2, WebkitOverflowScrolling: "touch" }}>
+          {/* Category filter chips — horizontal scroll */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 20, overflowX: "auto", paddingBottom: 4, WebkitOverflowScrolling: "touch", msOverflowStyle: "none", scrollbarWidth: "none" }}>
             <button onClick={() => setTxCategoryFilter(null)}
-              style={{ padding: "6px 14px", fontSize: 12, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                background: !txCategoryFilter ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.04)",
-                color: !txCategoryFilter ? "#818cf8" : "#71717a", fontWeight: !txCategoryFilter ? 600 : 400 }}>
+              style={{ padding: "8px 16px", fontSize: 13, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                background: !txCategoryFilter ? "#e4e4e7" : "rgba(255,255,255,0.06)",
+                color: !txCategoryFilter ? "#09090f" : "#71717a", fontWeight: 600 }}>
               All
             </button>
             {uniqueCats.map((cat) => (
               <button key={cat.id} onClick={() => setTxCategoryFilter(txCategoryFilter === cat.id ? null : cat.id)}
-                style={{ padding: "6px 12px", fontSize: 12, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 4,
-                  background: txCategoryFilter === cat.id ? `${cat.color}22` : "rgba(255,255,255,0.04)",
-                  color: txCategoryFilter === cat.id ? cat.color : "#71717a", fontWeight: txCategoryFilter === cat.id ? 600 : 400 }}>
-                <span style={{ fontSize: 12 }}>{cat.icon}</span> {cat.label}
+                style={{ padding: "8px 14px", fontSize: 13, border: "none", borderRadius: 20, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                  background: txCategoryFilter === cat.id ? cat.color : "rgba(255,255,255,0.06)",
+                  color: txCategoryFilter === cat.id ? "#09090f" : "#71717a", fontWeight: txCategoryFilter === cat.id ? 700 : 500 }}>
+                {cat.label}
               </button>
             ))}
           </div>
 
-          {/* Transaction groups */}
+          {/* Transaction groups — Revolut style */}
           {dateKeys.map((date) => {
             const group = groups[date];
             return (
-              <div key={date}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0 8px" }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#71717a" }}>{formatDateHeader(date)}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: group.total >= 0 ? "#34d399" : "#a1a1aa" }}>
+              <div key={date} style={{ marginBottom: 24 }}>
+                {/* Date header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "0 0 12px" }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "#e4e4e7" }}>{formatDateHeader(date)}</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: group.total >= 0 ? "#34d399" : "#a1a1aa" }}>
                     {group.total >= 0 ? "+" : "-"}{"\u00A3"}{fmt(group.total)}
                   </span>
                 </div>
-                <div style={{ ...card, padding: 0, overflow: "hidden", marginBottom: 8 }}>
+                {/* Transaction rows */}
+                <div style={{ background: "rgba(255,255,255,0.025)", borderRadius: 16, overflow: "hidden" }}>
                   {group.txns.map((tx, i) => {
                     const cat = getCat(tx.categoryId);
+                    // Format time from timestamp
+                    const time = tx.timestamp ? new Date(tx.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "";
                     return (
-                      <div key={tx.id} style={{ display: "flex", alignItems: "center", padding: "13px 16px", borderBottom: i < group.txns.length - 1 ? "1px solid rgba(255,255,255,0.03)" : "none" }}>
-                        <MerchantIcon merchant={tx.merchant} rawMerchant={tx.rawMerchant} categoryId={tx.categoryId} size={40} />
-                        <div style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
-                            <button onClick={(e) => { e.stopPropagation(); setEditingTx(tx.id); }}
-                              style={{ fontSize: 11, color: cat.color, background: `${cat.color}10`, border: "none", padding: "2px 8px", borderRadius: 10, cursor: "pointer", fontWeight: 500 }}>
-                              {cat.label}
-                            </button>
-                            {tx.accountName && <span style={{ fontSize: 10, color: "#3f3f46" }}>{tx.accountName}</span>}
-                          </div>
+                      <div key={tx.id}
+                        onClick={() => setEditingTx(tx.id)}
+                        style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: i < group.txns.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", cursor: "pointer" }}>
+                        <MerchantIcon merchant={tx.merchant} rawMerchant={tx.rawMerchant} categoryId={tx.categoryId} size={44} />
+                        <div style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
+                          <div style={{ fontSize: 15, fontWeight: 500, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</div>
+                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time}{tx.accountName ? ` \u00B7 ${tx.accountName}` : ""}</div>
                         </div>
-                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7" }}>
-                            {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
-                          </div>
-                          {tx.pending && <div style={{ fontSize: 9, color: "#fbbf24", marginTop: 1, fontWeight: 500 }}>PENDING</div>}
+                        <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7", flexShrink: 0, marginLeft: 12 }}>
+                          {tx.amount >= 0 ? "+" : "-"}{"\u00A3"}{fmt(tx.amount)}
                         </div>
                       </div>
                     );
@@ -1177,9 +1194,9 @@ export default function Dashboard() {
           })}
           {filtered.length === 0 && (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#3f3f46" }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>{"\u{1F4B3}"}</div>
-              <div style={{ fontSize: 14, fontWeight: 500 }}>{allTransactions.length === 0 ? "No transactions yet" : "No matching transactions"}</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>{allTransactions.length === 0 ? "Connect your bank to see transactions" : "Try adjusting your search or filters"}</div>
+              <div style={{ fontSize: 40, marginBottom: 16 }}>{"\u{1F4B3}"}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: "#71717a" }}>{allTransactions.length === 0 ? "No transactions yet" : "No matching transactions"}</div>
+              <div style={{ fontSize: 13, marginTop: 6, color: "#3f3f46" }}>{allTransactions.length === 0 ? "Connect your bank to see transactions" : "Try adjusting your search or filters"}</div>
             </div>
           )}
         </div>
