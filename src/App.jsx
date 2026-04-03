@@ -1331,7 +1331,7 @@ export default function Dashboard() {
                             <span style={{ fontSize: 15, fontWeight: 500, color: "#f4f4f5", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.merchant}</span>
                             {tx.pending && <span style={{ fontSize: 9, fontWeight: 600, color: "#fbbf24", background: "rgba(251,191,36,0.12)", padding: "1px 6px", borderRadius: 4, flexShrink: 0 }}>PENDING</span>}
                           </div>
-                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{time ? `${time} \u00B7 ${cat.label}` : cat.label}</div>
+                          <div style={{ fontSize: 12, color: "#52525b", marginTop: 3 }}>{cat.label}</div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
                           <div style={{ fontSize: 15, fontWeight: 600, color: tx.amount >= 0 ? "#34d399" : "#e4e4e7" }}>
