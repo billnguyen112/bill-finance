@@ -24,6 +24,7 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15      # hard cap so a slow data source can never hang the run
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -47,6 +48,8 @@ jobs:
           curl -fsSL "$URL" -o data/history.json || echo "no published history yet — starting fresh"
 
       - name: Scrape data + compute snapshot
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
         run: python pipeline/run.py refresh
 
       - uses: actions/setup-node@v4
