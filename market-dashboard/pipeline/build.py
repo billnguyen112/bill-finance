@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 import config
 import sources
@@ -18,19 +18,12 @@ import explanations
 import signals as signals_mod
 import semis as semis_mod
 import valuation as valuation_mod
+import fed as fed_mod
 
 
 def _meta(row) -> dict:
     keys = ["key", "fred_id", "label", "section", "kind", "unit", "better"]
     return dict(zip(keys, row))
-
-
-def _load_prev_snapshot() -> dict | None:
-    """Last published snapshot (downloaded by the workflow), for cache fallback."""
-    try:
-        return json.loads((config.DATA_DIR / "prev_snapshot.json").read_text())
-    except (OSError, json.JSONDecodeError):
-        return None
 
 
 def _fetch(fid: str):
@@ -131,16 +124,19 @@ def build(verbose: bool = False) -> dict:
             "metrics": sec_metrics,
         })
 
-    # Semiconductor monitor — also feeds the semi signals (no duplicate calls).
-    # Pass the previously published snapshot so names the FMP daily limit blocks
-    # fall back to last-good values instead of blanking.
-    prev_snapshot = _load_prev_snapshot()
-    semis = semis_mod.build_semis(prev=(prev_snapshot or {}).get("semis"))
+    # Semiconductor monitor — live API only; also feeds the semi signals.
+    semis = semis_mod.build_semis()
+
+    # Market-implied Fed read (cutting->hiking pivot risk) from the front curve.
+    def _latest(fid):
+        obs = fetched.get(fid, ([], None))[0]
+        return obs[-1][1] if obs else None
+    fed_read = fed_mod.build(_latest("DFF"), _latest("DGS3MO"), date.today().isoformat())
 
     # Extra data for the buy/sell signal model.
-    extras = {"margin": sources.finra_margin_debt()}
+    extras = {"margin": sources.finra_margin_debt(), "fed": fed_read}
     if semis:
-        extras["semis_pe"] = [c["pe"] for c in semis["companies"] if c.get("pe")]
+        extras["semis_pe"] = [c["fwd_pe"] for c in semis["companies"] if c.get("fwd_pe")]
         extras["semis_rev"] = [c["rev_yoy"] for c in semis["companies"] if c.get("rev_yoy") is not None]
     if config.FMP_API_KEY:
         sectors = sources.fmp_sectors()
@@ -156,13 +152,14 @@ def build(verbose: bool = False) -> dict:
         extras["leaders_growth"] = sum(leads) / len(leads) if leads else None
     playbook = signals_mod.build_playbook(metrics_by_key, cape, overall, extras)
 
-    valuation = valuation_mod.build_valuation(prev=(prev_snapshot or {}).get("valuation"))
+    valuation = valuation_mod.build_valuation()
 
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
         "generated_at": now,
         "overall": overall,
         "playbook": playbook,
+        "fed": fed_read,
         "semis": semis,
         "valuation": valuation,
         "sections": sections,

@@ -48,7 +48,6 @@ export default function ValuationView({ valuation }) {
                   <tr key={c.symbol}>
                     <td className="l">
                       <span className="sym">{c.symbol}</span>
-                      {c.stale && <span className="stale-tag" title="cached from last refresh">cached</span>}
                       <span className="cname">{c.name}</span>
                     </td>
                     <td><M v={c.pe} /></td><td><M v={c.fwd_pe} /></td>

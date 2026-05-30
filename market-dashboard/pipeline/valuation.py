@@ -70,24 +70,21 @@ def _one(item) -> dict:
         "pb": _pos(r.get("priceToBookRatioTTM")),
         "ps": _pos(r.get("priceToSalesRatioTTM")),
         "ev_ebitda": _pos(km.get("evToEBITDATTM")),
-        "stale": False,
     }
 
 
-def build_valuation(prev: dict | None = None) -> dict | None:
+def build_valuation() -> dict | None:
     if not config.FMP_API_KEY:
         return None
     with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
         rows = list(ex.map(_one, UNIVERSE))
-    for i, c in enumerate(rows):
-        if c.get("price") is None:
+    for _ in range(2):  # live-only retry for transiently rate-limited names
+        missing = [i for i, c in enumerate(rows) if c.get("price") is None]
+        if not missing:
+            break
+        for i in missing:
             time.sleep(0.3)
             rows[i] = _one(UNIVERSE[i])
-    if prev and prev.get("groups"):
-        pmap = {c["symbol"]: c for g in prev["groups"] for c in g.get("companies", [])}
-        for i, c in enumerate(rows):
-            if c.get("price") is None and c["symbol"] in pmap:
-                rows[i] = {**pmap[c["symbol"]], "stale": True}
 
     def medians(items):
         return {m: _median([c.get(m) for c in items]) for m in MULTIPLES}

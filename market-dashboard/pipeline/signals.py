@@ -106,13 +106,11 @@ def _semis_plateau(metrics, cape, ex):
 
 
 def _fed_pivot(metrics, cape, ex):
-    v = _headline(metrics, "fed_funds")
-    d = _change(metrics, "fed_funds", "1y")
-    if v is None:
-        return _pending("Fed funds unavailable")
-    pivoting = d is not None and d <= -0.25
-    return _auto(pivoting, f"Fed funds {v:.2f}% — "
-                           f"{'cutting (easing pivot underway)' if pivoting else 'no easing pivot yet'}")
+    """Sell trigger: market is pricing a pivot from cutting back to HIKING."""
+    fed = (ex or {}).get("fed")
+    if not fed:
+        return _pending("Fed rate data unavailable")
+    return _auto(fed.get("stance") == "hike", fed["reading"])
 
 
 def _crazy_valuation(metrics, cape, ex):
@@ -120,7 +118,7 @@ def _crazy_valuation(metrics, cape, ex):
     if pes:
         med = _median(pes)
         crazy = med is not None and med > config.VALUATION_PE_EXTREME
-        return _auto(crazy, f"Semis median P/E {med:.0f} — {'extreme' if crazy else 'elevated' if med and med>30 else 'moderate'}")
+        return _auto(crazy, f"Semis median forward P/E {med:.0f} — {'extreme' if crazy else 'elevated' if med and med>30 else 'moderate'}")
     if cape is not None:  # market-wide fallback
         crazy = cape >= 35
         return _auto(crazy, f"Shiller CAPE {cape:.1f} (market-wide) — {'extreme' if crazy else 'elevated' if cape >= 30 else 'moderate'}")
@@ -136,7 +134,7 @@ BUY_SPECS = [
 ]
 SELL_SPECS = [
     ("Tech/semi earnings plateau", "Semiconductor revenue growth is plateauing.", _semis_plateau),
-    ("Fed official pivot", "The Fed makes an official easing pivot (actively cutting).", _fed_pivot),
+    ("Fed pivots to hiking", "Market-implied rates (3M T-bill vs fed funds, FOMC calendar) signal a pivot from cutting back to hiking.", _fed_pivot),
     ("Crazy tech/semi valuation", "Semiconductor valuations are extreme.", _crazy_valuation),
 ]
 

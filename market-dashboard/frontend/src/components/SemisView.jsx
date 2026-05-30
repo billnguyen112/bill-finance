@@ -62,7 +62,7 @@ export default function SemisView({ semis }) {
             <thead>
               <tr>
                 <th className="l">Company</th><th>Price</th><th>% from high</th>
-                <th>1M</th><th>1Y</th><th>P/E</th><th>Rev y/y</th><th>Next earnings</th>
+                <th>1M</th><th>1Y</th><th>Fwd P/E</th><th>Rev y/y</th><th>Next earnings</th>
               </tr>
             </thead>
             <tbody>
@@ -70,7 +70,6 @@ export default function SemisView({ semis }) {
                 <tr key={c.symbol}>
                   <td className="l">
                     <span className="sym">{c.symbol}</span>
-                    {c.stale && <span className="stale-tag" title="cached from last refresh">cached</span>}
                     <span className="cname">{c.name} · {c.role}</span>
                   </td>
                   <td>{c.price != null ? `$${num(c.price, 2)}` : "—"} <span className="mc">{mcap(c.market_cap)}</span></td>
