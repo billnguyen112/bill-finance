@@ -80,6 +80,7 @@ def build(verbose: bool = False) -> dict:
         explain = explanations.VARIABLE.get(meta["key"])
         if explain:
             metric["explain"] = explain
+        metric["source_url"] = f"https://fred.stlouisfed.org/series/{meta['fred_id']}"
         metrics_by_key[meta["key"]] = metric
         if verbose:
             st = metric.get("status")
@@ -99,6 +100,7 @@ def build(verbose: bool = False) -> dict:
             ex = explanations.VARIABLE.get("gold")
             if ex:
                 gm["explain"] = ex
+            gm["source_url"] = "https://www.tradingview.com/symbols/TVC-GOLD/"
             metrics_by_key["gold"] = gm
 
     # Yield curve (best effort; tolerate missing tenors)
@@ -132,6 +134,28 @@ def build(verbose: bool = False) -> dict:
         obs = fetched.get(fid, ([], None))[0]
         return obs[-1][1] if obs else None
     fed_read = fed_mod.build(_latest("DFF"), _latest("DGS3MO"), date.today().isoformat())
+    if fed_read:
+        def _hl(key):
+            return (metrics_by_key.get(key) or {}).get("headline")
+        # Leading indicators for spotting a Fed pivot (all charted at the source).
+        fed_read["panel"] = [
+            {"label": "3M T-bill", "value": _latest("DGS3MO"), "unit": "%", "id": "DGS3MO",
+             "note": "near-term market-expected policy rate"},
+            {"label": "Fed funds (effective)", "value": _hl("fed_funds"), "unit": "%", "id": "DFF",
+             "note": "current policy rate"},
+            {"label": "3M − fed funds", "value": fed_read["implied_bp"] / 100, "unit": "pp", "id": "DGS3MO",
+             "note": "+ = hike priced, − = cut priced"},
+            {"label": "2Y Treasury", "value": _hl("ust_2y"), "unit": "%", "id": "DGS2",
+             "note": "market path over ~2y"},
+            {"label": "2s10s curve", "value": _hl("curve_2s10s"), "unit": "%", "id": "T10Y2Y",
+             "note": "inversion = recession/cut signal"},
+            {"label": "10Y real (TIPS)", "value": _hl("real_10y"), "unit": "%", "id": "DFII10",
+             "note": "how restrictive policy is"},
+            {"label": "10Y breakeven", "value": _hl("breakeven_10y"), "unit": "%", "id": "T10YIE",
+             "note": "market inflation expectations"},
+        ]
+        for it in fed_read["panel"]:
+            it["source_url"] = f"https://fred.stlouisfed.org/series/{it['id']}"
 
     # Extra data for the buy/sell signal model.
     extras = {"margin": sources.finra_margin_debt(), "fed": fed_read}

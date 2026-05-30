@@ -125,25 +125,39 @@ def _crazy_valuation(metrics, cape, ex):
     return _pending("Awaiting valuation data")
 
 
+_FRED = "https://fred.stlouisfed.org/series/"
+_SECTORS = "https://stockanalysis.com/markets/sectors/"
+_SMH = "https://stockanalysis.com/etf/smh/"
+
+# name, rule, criteria (fixed trigger), (source_label, source_url), fn
 BUY_SPECS = [
-    ("VIX > 30", "Buy into fear — VIX above 30.", _vix),
-    ("Fed not hiking", "Fed funds rate is not rising.", _fed_not_rising),
-    ("Margin debt falling", "FINRA margin debt is decreasing month over month.", _margin),
-    ("Clear leading sectors", "There is clear sector leadership (dispersion + positive leaders).", _leading_sectors),
-    ("Leaders' earnings growth", "The leading sectors show revenue/earnings growth.", _leaders_earnings),
+    ("VIX > 30", "Buy into fear — VIX above 30.", "VIX > 30",
+     ("FRED: VIXCLS", _FRED + "VIXCLS"), _vix),
+    ("Fed not hiking", "Fed funds rate is not rising.", "Fed funds Δ1y ≤ 0",
+     ("FRED: DFF", _FRED + "DFF"), _fed_not_rising),
+    ("Margin debt falling", "FINRA margin debt is decreasing month over month.",
+     "Margin debt ↓ vs prior month", ("FINRA margin stats", config.FINRA_MARGIN_URL), _margin),
+    ("Clear leading sectors", "There is clear sector leadership (dispersion + positive leaders).",
+     "Top–bottom sector spread ≥ 1% with ≥1 positive leader", ("Sector performance", _SECTORS), _leading_sectors),
+    ("Leaders' earnings growth", "The leading sectors show revenue/earnings growth.",
+     "Leading sectors' bellwether revenue YoY > 0", ("Sector performance", _SECTORS), _leaders_earnings),
 ]
 SELL_SPECS = [
-    ("Tech/semi earnings plateau", "Semiconductor revenue growth is plateauing.", _semis_plateau),
-    ("Fed pivots to hiking", "Market-implied rates (3M T-bill vs fed funds, FOMC calendar) signal a pivot from cutting back to hiking.", _fed_pivot),
-    ("Crazy tech/semi valuation", "Semiconductor valuations are extreme.", _crazy_valuation),
+    ("Tech/semi earnings plateau", "Semiconductor revenue growth is plateauing.",
+     f"Semis median revenue YoY < {config.PLATEAU_REV_GROWTH:.0f}%", ("Semis (SMH)", _SMH), _semis_plateau),
+    ("Fed pivots to hiking", "Market-implied rates (3M T-bill vs fed funds, FOMC calendar) signal a pivot from cutting back to hiking.",
+     "3M T-bill − fed funds ≥ +10bp (hike priced)", ("FRED: DGS3MO", _FRED + "DGS3MO"), _fed_pivot),
+    ("Crazy tech/semi valuation", "Semiconductor valuations are extreme.",
+     f"Semis median forward P/E > {config.VALUATION_PE_EXTREME:.0f}", ("Semis (SMH)", _SMH), _crazy_valuation),
 ]
 
 
 def _build(specs, metrics, cape, ex):
     out = []
-    for name, rule, fn in specs:
+    for name, rule, criteria, source, fn in specs:
         res = fn(metrics, cape, ex)
-        out.append({"name": name, "rule": rule, **res})
+        out.append({"name": name, "rule": rule, "criteria": criteria,
+                    "source_label": source[0], "source_url": source[1], **res})
     return out
 
 

@@ -23,7 +23,13 @@ function SignalRow({ s }) {
         <StateBadge kind={s.kind} met={s.met} />
       </div>
       <p className="srow-rule">{s.rule}</p>
-      <div className="srow-now">{s.reading}</div>
+      {s.criteria && <div className="srow-criteria">Trigger: <b>{s.criteria}</b></div>}
+      <div className="srow-now">
+        {s.reading}
+        {s.source_url && (
+          <> · <a href={s.source_url} target="_blank" rel="noreferrer">{s.source_label || "chart"} ↗</a></>
+        )}
+      </div>
     </div>
   );
 }
