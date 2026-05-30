@@ -31,6 +31,9 @@ def _fetch(fid: str):
 
 def build(verbose: bool = False) -> dict:
     config.ensure_dirs()
+    if verbose:
+        print(f"FRED key: {'set (API mode)' if config.FRED_API_KEY else 'MISSING (keyless CSV — throttled in CI)'}"
+              f" | FMP key: {'set' if config.FMP_API_KEY else 'missing'}")
     metrics_by_key: dict[str, dict] = {}
     errors: list[dict] = []
 
@@ -124,7 +127,8 @@ def build(verbose: bool = False) -> dict:
         "ok_count": sum(1 for m in metrics_by_key.values() if m.get("status") == "ok"),
         "total_count": len(metrics_by_key),
         "errors": errors,
-        "source": "FRED (fredgraph.csv) + multpl.com (CAPE)",
+        "fred_mode": "api" if config.FRED_API_KEY else "csv",
+        "fmp_enabled": bool(config.FMP_API_KEY),
     }
     config.SNAPSHOT_PATH.write_text(json.dumps(snapshot, indent=2))
     _append_history(now, overall, cape)

@@ -23,7 +23,8 @@ HISTORY_PATH = DATA_DIR / "history.json"     # overall score over time
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 # Free key from https://fredaccount.stlouisfed.org/apikeys — required for cloud/CI
 # runs (FRED throttles the keyless CSV endpoint from datacenter IPs).
-FRED_API_KEY = os.environ.get("FRED_API_KEY")
+# .strip() guards against a stray newline/space pasted into the secret.
+FRED_API_KEY = (os.environ.get("FRED_API_KEY") or "").strip() or None
 
 # --- FINRA margin statistics (no key) --------------------------------------
 FINRA_MARGIN_URL = "https://www.finra.org/investors/learn-to-invest/advanced-investing/margin-statistics"
@@ -31,7 +32,7 @@ FINRA_MARGIN_URL = "https://www.finra.org/investors/learn-to-invest/advanced-inv
 # --- Financial Modeling Prep (free key) ------------------------------------
 # Get one at https://site.financialmodelingprep.com/developer/docs (Free plan).
 # Unlocks the leading-sectors, sector/tech earnings, and tech valuation signals.
-FMP_API_KEY = os.environ.get("FMP_API_KEY")
+FMP_API_KEY = (os.environ.get("FMP_API_KEY") or "").strip() or None
 FMP_BASE = "https://financialmodelingprep.com/api/v3"
 # Semiconductor / big-tech basket for the valuation + earnings-plateau signals.
 SEMIS_BASKET = ["NVDA", "AVGO", "AMD", "TSM", "MU", "QCOM"]
