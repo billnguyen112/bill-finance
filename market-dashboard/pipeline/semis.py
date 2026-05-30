@@ -61,45 +61,48 @@ def _one(item) -> dict:
     sym, name, role = item
     q = sources.fmp_quote(sym) or {}
     pc = sources.fmp_price_change(sym) or {}
-    inc = sources.fmp_income_quarterly(sym, limit=5)   # free tier caps limit at 5
+    inc = sources.fmp_income_quarterly(sym, limit=5)
     nxt = sources.fmp_next_earnings(sym)
-    pe = sources.fmp_pe(sym)
+    est = sources.fmp_estimates(sym)
 
     revs = [r.get("revenue") for r in inc]
     rev_yoy = _r((revs[0] / revs[4] - 1) * 100) if len(revs) >= 5 and revs[0] and revs[4] else None
     rev_qoq = _r((revs[0] / revs[1] - 1) * 100) if len(revs) >= 2 and revs[0] and revs[1] else None
 
     price, yh = q.get("price"), q.get("yearHigh")
+    fwd_pe = None
+    if isinstance(price, (int, float)) and est:
+        future = sorted((e for e in est if e.get("date") and e["date"] >= date.today().isoformat()),
+                        key=lambda e: e["date"])
+        eps = (future[0] if future else {}).get("epsAvg")
+        if isinstance(eps, (int, float)) and eps > 0:
+            fwd_pe = round(price / eps, 1)
     a50, a200 = q.get("priceAvg50"), q.get("priceAvg200")
     return {
         "symbol": sym, "name": name, "role": role,
-        "price": price, "market_cap": q.get("marketCap"), "pe": _r(pe),
+        "price": price, "market_cap": q.get("marketCap"), "fwd_pe": fwd_pe,
         "pct_from_high": _r((price / yh - 1) * 100) if price and yh else None,
         "above_50dma": (price > a50) if price and a50 else None,
         "above_200dma": (price > a200) if price and a200 else None,
         "m1": _r(pc.get("1M")), "m3": _r(pc.get("3M")), "y1": _r(pc.get("1Y")),
         "rev_yoy": rev_yoy, "rev_qoq": rev_qoq, "next_earnings": nxt,
-        "stale": False,
     }
 
 
-def build_semis(prev: dict | None = None) -> dict | None:
+def build_semis() -> dict | None:
     if not config.FMP_API_KEY:
         return None
     with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
         companies = list(ex.map(_one, SEMI_TICKERS))
-    # Gentle sequential retry for any name whose burst got rate-limited.
-    for i, c in enumerate(companies):
-        if c.get("price") is None:
-            time.sleep(0.4)
+    # Live-only: a couple of sequential retry passes for any name whose burst
+    # got transiently rate-limited, so all names fill from the API.
+    for _ in range(2):
+        missing = [i for i, c in enumerate(companies) if c.get("price") is None]
+        if not missing:
+            break
+        for i in missing:
+            time.sleep(0.3)
             companies[i] = _one(SEMI_TICKERS[i])
-    # Backfill anything still missing (e.g. daily FMP limit reached) from the
-    # last published snapshot, marked stale — better than blank cells.
-    if prev and prev.get("companies"):
-        pmap = {c.get("symbol"): c for c in prev["companies"]}
-        for i, c in enumerate(companies):
-            if c.get("price") is None and c["symbol"] in pmap:
-                companies[i] = {**pmap[c["symbol"]], "stale": True}
     companies.sort(key=lambda c: (c.get("market_cap") or 0), reverse=True)
     n = len(companies)
 
