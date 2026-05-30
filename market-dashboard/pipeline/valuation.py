@@ -31,6 +31,7 @@ UNIVERSE = [
     ("ADBE", "Adobe", "Big Tech"), ("PLTR", "Palantir", "Big Tech"),
 ]
 MULTIPLES = ("pe", "fwd_pe", "pb", "ps", "ev_ebitda")
+MEDIAN_KEYS = MULTIPLES + ("gross_margin", "op_margin", "fcf_ni")
 
 
 def _pos(v):
@@ -45,13 +46,24 @@ def _median(xs):
     return round(xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2, 1)
 
 
+def _pct(v):
+    return round(v * 100, 1) if isinstance(v, (int, float)) else None
+
+
 def _one(item) -> dict:
     sym, name, grp = item
     q = sources.fmp_quote(sym) or {}
     r = sources.fmp_ratios(sym) or {}
     km = sources.fmp_key_metrics(sym) or {}
     est = sources.fmp_estimates(sym)
+    cf = sources.fmp_cash_flow(sym) or {}
     price = q.get("price")
+
+    # Earnings-quality metrics (his "CFO illusions" lens).
+    fcf, sbc, ocf, ni = (cf.get("freeCashFlow"), cf.get("stockBasedCompensation"),
+                         cf.get("operatingCashFlow"), cf.get("netIncome"))
+    fcf_ni = round(fcf / ni, 2) if isinstance(fcf, (int, float)) and ni else None
+    sbc_ocf = round(sbc / ocf * 100, 1) if isinstance(sbc, (int, float)) and ocf else None
 
     fwd_pe = None
     if isinstance(price, (int, float)) and est:
@@ -70,6 +82,10 @@ def _one(item) -> dict:
         "pb": _pos(r.get("priceToBookRatioTTM")),
         "ps": _pos(r.get("priceToSalesRatioTTM")),
         "ev_ebitda": _pos(km.get("evToEBITDATTM")),
+        "gross_margin": _pct(r.get("grossProfitMarginTTM")),
+        "op_margin": _pct(r.get("operatingProfitMarginTTM")),
+        "fcf_ni": fcf_ni,
+        "sbc_ocf": sbc_ocf,
     }
 
 
@@ -87,7 +103,7 @@ def build_valuation() -> dict | None:
             rows[i] = _one(UNIVERSE[i])
 
     def medians(items):
-        return {m: _median([c.get(m) for c in items]) for m in MULTIPLES}
+        return {m: _median([c.get(m) for c in items]) for m in MEDIAN_KEYS}
 
     groups = []
     for gname in ("Semiconductors", "Big Tech"):

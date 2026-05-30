@@ -19,6 +19,7 @@ import signals as signals_mod
 import semis as semis_mod
 import valuation as valuation_mod
 import fed as fed_mod
+import bubble as bubble_mod
 
 
 def _meta(row) -> dict:
@@ -160,8 +161,9 @@ def build(verbose: bool = False) -> dict:
     # Extra data for the buy/sell signal model.
     extras = {"margin": sources.finra_margin_debt(), "fed": fed_read}
     if semis:
-        extras["semis_pe"] = [c["fwd_pe"] for c in semis["companies"] if c.get("fwd_pe")]
-        extras["semis_rev"] = [c["rev_yoy"] for c in semis["companies"] if c.get("rev_yoy") is not None]
+        chips = [c for c in semis["companies"] if c.get("group") in semis_mod.CHIP_GROUPS]
+        extras["semis_pe"] = [c["fwd_pe"] for c in chips if c.get("fwd_pe")]
+        extras["semis_rev"] = [c["rev_yoy"] for c in chips if c.get("rev_yoy") is not None]
     if config.FMP_API_KEY:
         sectors = sources.fmp_sectors()
         extras["sectors"] = sectors
@@ -177,6 +179,16 @@ def build(verbose: bool = False) -> dict:
     playbook = signals_mod.build_playbook(metrics_by_key, cape, overall, extras)
 
     valuation = valuation_mod.build_valuation()
+
+    # Bubble & concentration gauge (CAPE context + Mag-7 share of GDP).
+    bubble = None
+    if config.FMP_API_KEY:
+        try:
+            gdp_obs = sources.fred_series("GDP")  # nominal GDP, $bn
+            nominal_gdp = gdp_obs[-1][1] if gdp_obs else None
+        except Exception:
+            nominal_gdp = None
+        bubble = bubble_mod.build(cape, nominal_gdp)
 
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
@@ -225,6 +237,7 @@ def build(verbose: bool = False) -> dict:
         "overall": overall,
         "playbook": playbook,
         "fed": fed_read,
+        "bubble": bubble,
         "sources": sources_block,
         "semis": semis,
         "valuation": valuation,

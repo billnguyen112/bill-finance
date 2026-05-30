@@ -70,7 +70,7 @@ export default function SemisView({ semis }) {
                 <tr key={c.symbol}>
                   <td className="l">
                     <span className="sym">{c.symbol}</span>
-                    <span className="cname">{c.name} · {c.role}</span>
+                    <span className="cname">{c.name} · {c.group}</span>
                   </td>
                   <td>{c.price != null ? `$${num(c.price, 2)}` : "—"} <span className="mc">{mcap(c.market_cap)}</span></td>
                   <td>{signed(c.pct_from_high)}</td>

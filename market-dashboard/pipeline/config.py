@@ -85,6 +85,7 @@ SECTIONS = [
     ("equities", "Equities & Volatility"),
     ("housing", "Housing"),
     ("labor", "Labor & Growth"),
+    ("growth", "Growth & GDP Quality"),
     ("commodities", "Commodities & Dollar"),
 ]
 
@@ -119,6 +120,9 @@ SERIES = [
     ("unemployment",  "UNRATE",             "Unemployment Rate",   "labor",       "rate",      "%",    "down"),
     ("payrolls",      "PAYEMS",             "Nonfarm Payrolls",    "labor",       "level_chg", "k",    "up"),
     ("claims",        "ICSA",               "Initial Jobless Claims","labor",     "level",     "",     "down"),
+
+    ("real_gdp",      "A191RL1Q225SBEA",    "Real GDP growth",     "growth",      "rate",      "%",    "up"),
+    ("final_sales",   "A653RL1Q225SBEA",    "Real Final Sales (priv. dom.)", "growth", "rate",  "%",    "up"),
 
     ("wti",           "DCOILWTICO",         "WTI Crude",           "commodities", "price",     "$",    "none"),
     ("brent",         "DCOILBRENTEU",       "Brent Crude",         "commodities", "price",     "$",    "none"),

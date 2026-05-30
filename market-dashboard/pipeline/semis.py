@@ -16,29 +16,30 @@ from datetime import date, timedelta
 import config
 import sources
 
-# (ticker, display name, role) — market-cap-weighted, ecosystem-aware.
+# (ticker, display name, group) — the AI-infrastructure complex Meldrum tracks.
 SEMI_TICKERS = [
-    ("NVDA", "Nvidia", "AI/GPU"),
-    ("TSM", "TSMC", "Foundry"),
-    ("AVGO", "Broadcom", "AI networking"),
-    ("ASML", "ASML", "Litho equipment"),
-    ("AMD", "AMD", "CPU/GPU"),
-    ("QCOM", "Qualcomm", "Mobile/edge"),
-    ("TXN", "Texas Instruments", "Analog"),
-    ("ARM", "Arm Holdings", "Design IP"),
-    ("AMAT", "Applied Materials", "Equipment"),
-    ("MU", "Micron", "Memory"),
-    ("LRCX", "Lam Research", "Equipment"),
-    ("KLAC", "KLA", "Equipment"),
-    ("ADI", "Analog Devices", "Analog"),
-    ("INTC", "Intel", "IDM"),
-    ("MRVL", "Marvell", "Data-center"),
-    ("NXPI", "NXP", "Auto/industrial"),
-    ("MCHP", "Microchip", "Microcontrollers"),
-    ("ON", "ON Semi", "Power/auto"),
-    ("SNPS", "Synopsys", "EDA"),
-    ("CDNS", "Cadence", "EDA"),
+    # Chips
+    ("NVDA", "Nvidia", "Chips"), ("AVGO", "Broadcom", "Chips"), ("AMD", "AMD", "Chips"),
+    ("QCOM", "Qualcomm", "Chips"), ("TXN", "Texas Instruments", "Chips"), ("ARM", "Arm Holdings", "Chips"),
+    ("MRVL", "Marvell", "Chips"), ("NXPI", "NXP", "Chips"), ("MCHP", "Microchip", "Chips"),
+    ("ADI", "Analog Devices", "Chips"), ("ON", "ON Semi", "Chips"), ("INTC", "Intel", "Chips"),
+    # Memory & foundry
+    ("TSM", "TSMC", "Foundry"), ("MU", "Micron", "Memory"),
+    # Equipment & EDA
+    ("ASML", "ASML", "Equipment"), ("AMAT", "Applied Materials", "Equipment"),
+    ("LRCX", "Lam Research", "Equipment"), ("KLAC", "KLA", "Equipment"),
+    ("SNPS", "Synopsys", "EDA"), ("CDNS", "Cadence", "EDA"),
+    # AI cloud / data
+    ("CRWV", "CoreWeave", "AI Cloud"), ("NBIS", "Nebius", "AI Cloud"), ("INOD", "Innodata", "AI Data"),
+    # AI power / nuclear
+    ("CEG", "Constellation", "AI Power"), ("VST", "Vistra", "AI Power"),
+    ("GEV", "GE Vernova", "AI Power"), ("SMR", "NuScale", "AI Power"), ("OKLO", "Oklo", "AI Power"),
+    # Networking
+    ("ANET", "Arista", "Networking"), ("CRDO", "Credo", "Networking"),
 ]
+# Groups that count as actual semiconductors for the semi-specific buy/sell signals.
+CHIP_GROUPS = {"Chips", "Memory", "Foundry", "Equipment", "EDA"}
+GROUP_ORDER = ["Chips", "Foundry", "Memory", "Equipment", "EDA", "AI Cloud", "AI Data", "AI Power", "Networking"]
 
 
 def _r(x, d=1):
@@ -58,7 +59,7 @@ def _clamp01(x):
 
 
 def _one(item) -> dict:
-    sym, name, role = item
+    sym, name, group = item
     q = sources.fmp_quote(sym) or {}
     pc = sources.fmp_price_change(sym) or {}
     inc = sources.fmp_income_quarterly(sym, limit=5)
@@ -79,7 +80,7 @@ def _one(item) -> dict:
             fwd_pe = round(price / eps, 1)
     a50, a200 = q.get("priceAvg50"), q.get("priceAvg200")
     return {
-        "symbol": sym, "name": name, "role": role,
+        "symbol": sym, "name": name, "group": group,
         "price": price, "market_cap": q.get("marketCap"), "fwd_pe": fwd_pe,
         "pct_from_high": _r((price / yh - 1) * 100) if price and yh else None,
         "above_50dma": (price > a50) if price and a50 else None,

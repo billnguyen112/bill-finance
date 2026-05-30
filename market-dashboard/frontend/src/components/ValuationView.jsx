@@ -1,18 +1,22 @@
 import React from "react";
 import { num } from "../format.js";
 
-const LABELS = [["Trailing P/E", "pe"], ["Forward P/E", "fwd_pe"], ["P/B", "pb"], ["P/S", "ps"], ["EV/EBITDA", "ev_ebitda"]];
+const VAL_LABELS = [["Trailing P/E", "pe"], ["Forward P/E", "fwd_pe"], ["P/B", "pb"], ["P/S", "ps"], ["EV/EBITDA", "ev_ebitda"]];
+const QUAL_LABELS = [["Gross margin", "gross_margin", "%"], ["Op margin", "op_margin", "%"], ["FCF / Net income", "fcf_ni", "x"]];
 
-function M({ v }) {
-  return v == null ? <span className="muted">n/m</span> : <>{num(v, 1)}</>;
+function val(v, unit) {
+  if (v == null) return <span className="muted">n/m</span>;
+  if (unit === "%") return <>{num(v, 1)}%</>;
+  if (unit === "x") return <>{num(v, 2)}×</>;
+  return <>{num(v, 1)}</>;
 }
 
-function Medians({ medians }) {
+function Medians({ medians, labels }) {
   return (
     <div className="val-medians">
-      {LABELS.map(([label, k]) => (
+      {labels.map(([label, k, unit]) => (
         <div className="vstat" key={k}>
-          <span className="vstat-v"><M v={medians[k]} /></span>
+          <span className="vstat-v">{val(medians[k], unit)}</span>
           <span className="vstat-l">{label}</span>
         </div>
       ))}
@@ -27,20 +31,23 @@ export default function ValuationView({ valuation }) {
   return (
     <>
       <section className="card">
-        <span className="hero-eyebrow">Tech + Semiconductors — median valuation (trailing & forward)</span>
-        <Medians medians={valuation.overall_medians} />
+        <span className="hero-eyebrow">Tech + Semiconductors — median valuation (trailing & forward) + earnings quality</span>
+        <Medians medians={valuation.overall_medians} labels={VAL_LABELS} />
+        <div className="val-divider" />
+        <Medians medians={valuation.overall_medians} labels={QUAL_LABELS} />
       </section>
 
       {valuation.groups.map((g) => (
         <section className="card" key={g.name}>
           <h3 className="val-h">{g.name} <span className="cnt">group median</span></h3>
-          <Medians medians={g.medians} />
+          <Medians medians={g.medians} labels={VAL_LABELS} />
           <div className="semis-table-wrap">
             <table className="semis-table">
               <thead>
                 <tr>
                   <th className="l">Company</th><th>P/E</th><th>Fwd P/E</th>
                   <th>P/B</th><th>P/S</th><th>EV/EBITDA</th>
+                  <th>Gross %</th><th>Op %</th><th>FCF/NI</th><th>SBC %OCF</th>
                 </tr>
               </thead>
               <tbody>
@@ -50,8 +57,11 @@ export default function ValuationView({ valuation }) {
                       <span className="sym">{c.symbol}</span>
                       <span className="cname">{c.name}</span>
                     </td>
-                    <td><M v={c.pe} /></td><td><M v={c.fwd_pe} /></td>
-                    <td><M v={c.pb} /></td><td><M v={c.ps} /></td><td><M v={c.ev_ebitda} /></td>
+                    <td>{val(c.pe)}</td><td>{val(c.fwd_pe)}</td>
+                    <td>{val(c.pb)}</td><td>{val(c.ps)}</td><td>{val(c.ev_ebitda)}</td>
+                    <td>{val(c.gross_margin, "%")}</td><td>{val(c.op_margin, "%")}</td>
+                    <td className={c.fcf_ni != null && c.fcf_ni < 0.7 ? "neg" : ""}>{val(c.fcf_ni, "x")}</td>
+                    <td className={c.sbc_ocf != null && c.sbc_ocf > 25 ? "neg" : ""}>{val(c.sbc_ocf, "%")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -61,8 +71,9 @@ export default function ValuationView({ valuation }) {
       ))}
 
       <p className="foot muted">
-        Trailing multiples from FMP (ratios-ttm / key-metrics-ttm); forward P/E = price ÷ next-fiscal-year
-        consensus EPS. "n/m" = not meaningful (e.g. negative earnings). Informational only, not advice.
+        Multiples from FMP (ratios-ttm / key-metrics-ttm); forward P/E = price ÷ next-FY consensus EPS.
+        Earnings quality: <b>FCF/NI</b> &lt; 0.7× and <b>SBC %OCF</b> &gt; 25% (red) flag earnings not backed by cash
+        ("CFO illusions"). "n/m" = not meaningful. Informational only, not advice.
       </p>
     </>
   );

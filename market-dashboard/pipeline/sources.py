@@ -181,6 +181,12 @@ def fmp_history(symbol: str) -> list:
     return out
 
 
+def fmp_cash_flow(symbol: str) -> dict | None:
+    """Latest annual cash-flow statement (FCF, SBC, operating CF, net income)."""
+    d = fmp_stable("cash-flow-statement", symbol=symbol, period="annual", limit=1)
+    return d[0] if isinstance(d, list) and d else None
+
+
 def fmp_income_quarterly(symbol: str, limit: int = 6) -> list:
     d = fmp_stable("income-statement", symbol=symbol, period="quarter", limit=limit)
     return d if isinstance(d, list) else []

@@ -220,6 +220,13 @@ body {
 .fed-ind-l { font-size: 12px; color: var(--muted); }
 .fed-ind-v { font-family: var(--mono); font-size: 22px; font-weight: 700; }
 .fed-ind-n { font-size: 10.5px; color: var(--muted); line-height: 1.3; }
+
+/* Bubble card + valuation divider */
+.bubble-main { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.bubble-score { font-family: var(--display); font-size: 26px; font-weight: 600; }
+.bubble-score small { font-family: var(--mono); font-size: 14px; }
+.bubble-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.val-divider { height: 1px; background: var(--line); margin: 14px 0; }
 .srow-now a { color: var(--accent); text-decoration: none; }
 .srow.on .srow-name { color: var(--text); }
 
