@@ -18,6 +18,9 @@ SNAPSHOT_PATH = DATA_DIR / "snapshot.json"   # latest full read (dashboard reads
 HISTORY_PATH = DATA_DIR / "history.json"     # overall score over time
 
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
+# Free key from https://fredaccount.stlouisfed.org/apikeys — required for cloud/CI
+# runs (FRED throttles the keyless CSV endpoint from datacenter IPs).
+FRED_API_KEY = os.environ.get("FRED_API_KEY")
 
 # Network resilience (FRED is reliable from normal IPs; tune for slow links).
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "25"))

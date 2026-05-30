@@ -84,13 +84,26 @@ Want another indicator he watches? Find its FRED series id (e.g. `T10Y3M`,
 
 ## Data sources
 
-- **FRED** (Federal Reserve Bank of St. Louis) — `fredgraph.csv?id=<series>`
-  serves full history for any series with no API key.
+- **FRED** (Federal Reserve Bank of St. Louis) — full history for any series.
+  - **Locally:** uses the public `fredgraph.csv` endpoint, no key needed.
+  - **Cloud/CI:** FRED throttles that endpoint from datacenter IPs, so set a
+    free **FRED API key** (`FRED_API_KEY`) and the pipeline uses the official
+    API instead — fast and reliable. Get one in ~2 min:
+    https://fredaccount.stlouisfed.org/apikeys
 - **multpl.com** — current Shiller CAPE (best-effort scrape).
 
-No registration, no keys, no rate-limit headaches on a normal connection.
-(Cloud/datacenter IPs may see occasional throttling; the build tolerates
-partial fetches and shows whatever it got.)
+## Deploying to GitHub Pages (no local tools)
+
+The included workflow (`.github/workflows/market-dashboard.yml`) scrapes,
+builds, and publishes the dashboard entirely in GitHub's cloud — operate it
+from the browser:
+
+1. **Get a free FRED key:** https://fredaccount.stlouisfed.org/apikeys
+2. **Add it as a repo secret:** Settings → Secrets and variables → Actions →
+   New repository secret → name `FRED_API_KEY`, paste the key.
+3. **Enable Pages:** Settings → Pages → Source → **GitHub Actions**.
+4. **Run it:** Actions tab → *Market Dashboard* → **Run workflow** (also runs
+   weekly). When green, open `https://<user>.github.io/<repo>/`.
 
 ## Layout
 
