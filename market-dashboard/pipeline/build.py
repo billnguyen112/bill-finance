@@ -154,12 +154,54 @@ def build(verbose: bool = False) -> dict:
 
     valuation = valuation_mod.build_valuation()
 
+    # Data provenance — what's pulled, from where, with live status.
+    ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
+    fred_series = [
+        {"label": r[2], "id": r[1], "section": r[3],
+         "url": f"https://fred.stlouisfed.org/series/{r[1]}",
+         "status": (metrics_by_key.get(r[0]) or {}).get("status", "?")}
+        for r in config.SERIES
+    ]
+    sources_block = {
+        "providers": [
+            {"name": "FRED — Federal Reserve (St. Louis)", "url": "https://fred.stlouisfed.org",
+             "powers": "Macro: rates, inflation, credit spreads, equities, housing, labor, commodities, yield curve",
+             "status": f"{ok_count}/{len(metrics_by_key)} series live · {'API' if config.FRED_API_KEY else 'keyless CSV'}"},
+            {"name": "FINRA — Margin Statistics", "url": config.FINRA_MARGIN_URL,
+             "powers": "Monthly margin-debt buy signal",
+             "status": "live" if extras.get("margin") else "unavailable"},
+            {"name": "Financial Modeling Prep", "url": "https://financialmodelingprep.com",
+             "powers": "Equity prices, momentum, fundamentals, valuation multiples, sector performance, earnings dates, spot gold",
+             "status": "live (paid plan)" if config.FMP_API_KEY else "not configured"},
+            {"name": "multpl.com", "url": "https://www.multpl.com/shiller-pe",
+             "powers": "Shiller CAPE (valuation context)",
+             "status": f"CAPE {cape}" if cape is not None else "unavailable"},
+            {"name": "Federal Reserve — FOMC calendar", "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+             "powers": "Meeting dates for the market-implied Fed signal",
+             "status": f"next {fed_read['next_fomc']}" if fed_read and fed_read.get("next_fomc") else "—"},
+        ],
+        "fred_series": fred_series,
+        "fmp_endpoints": [
+            {"endpoint": "/stable/quote", "powers": "Price, 52-week range, 50/200-day averages"},
+            {"endpoint": "/stable/stock-price-change", "powers": "1M / 3M / 1Y momentum"},
+            {"endpoint": "/stable/income-statement", "powers": "Quarterly revenue → YoY growth"},
+            {"endpoint": "/stable/analyst-estimates", "powers": "Forward EPS → forward P/E"},
+            {"endpoint": "/stable/ratios-ttm", "powers": "Trailing P/E, P/B, P/S"},
+            {"endpoint": "/stable/key-metrics-ttm", "powers": "EV/EBITDA"},
+            {"endpoint": "/stable/earnings", "powers": "Next earnings dates"},
+            {"endpoint": "/stable/sector-performance-snapshot", "powers": "Leading-sector signals"},
+            {"endpoint": "/stable/historical-price-eod (GCUSD)", "powers": "Spot gold"},
+        ],
+        "gold_source": "FMP GCUSD (FRED discontinued its London-fix series)",
+    }
+
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
         "generated_at": now,
         "overall": overall,
         "playbook": playbook,
         "fed": fed_read,
+        "sources": sources_block,
         "semis": semis,
         "valuation": valuation,
         "sections": sections,

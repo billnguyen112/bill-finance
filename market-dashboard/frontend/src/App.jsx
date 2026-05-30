@@ -7,6 +7,7 @@ import ScoreHistory from "./components/ScoreHistory.jsx";
 import SignalsView from "./components/SignalsView.jsx";
 import SemisView from "./components/SemisView.jsx";
 import ValuationView from "./components/ValuationView.jsx";
+import SourcesView from "./components/SourcesView.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -140,6 +141,8 @@ export default function App() {
                   onClick={() => setView("semis")}>Semiconductors</button>
           <button className={"tab" + (view === "valuation" ? " active" : "")}
                   onClick={() => setView("valuation")}>Valuation</button>
+          <button className={"tab" + (view === "sources" ? " active" : "")}
+                  onClick={() => setView("sources")}>Sources</button>
         </nav>
       )}
 
