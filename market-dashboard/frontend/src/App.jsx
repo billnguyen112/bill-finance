@@ -110,6 +110,13 @@ export default function App() {
         </div>
       </header>
 
+      {snap?.fred_mode === "csv" && snap?.errors?.length > 0 && (
+        <div className="banner err">
+          FRED is running <b>keyless</b> (the public endpoint throttles in the cloud, so{" "}
+          {snap.errors.length} series failed). Add a <code>FRED_API_KEY</code> repo secret
+          (exact name) and re-run the workflow.
+        </div>
+      )}
       {status && <div className="banner ok">{status}</div>}
       {error && (
         <div className="banner err">
@@ -184,8 +191,10 @@ export default function App() {
       {view === "signals" && <SignalsView playbook={snap?.playbook} />}
 
       <footer className="foot muted">
-        Data: FRED (fredgraph.csv, no key) + multpl.com (CAPE). Signals are rule-based, not financial advice.
-        {snap?.errors?.length > 0 && ` · ${snap.errors.length} series unavailable this run.`}
+        Data: FRED ({snap?.fred_mode === "api" ? "API" : "keyless CSV"}) · FINRA · FMP{" "}
+        {snap?.fmp_enabled ? "on" : "off"} · multpl (CAPE). Signals are rule-based, not financial advice.
+        {snap?.ok_count != null && ` · ${snap.ok_count}/${snap.total_count} series loaded`}
+        {snap?.errors?.length > 0 && `, ${snap.errors.length} unavailable`}.
       </footer>
     </div>
   );

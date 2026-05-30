@@ -69,7 +69,7 @@ body {
 .banner.ok { background: #18261c; border: 1px solid #2f5135; color: #9fd6a9; }
 .banner.err { background: #2a1719; border: 1px solid #5a2f33; color: #e7a3a3; }
 .banner.info { background: #1b2330; border: 1px solid #33415a; color: #b8c6dc; }
-.banner.info code { font-family: var(--mono); background: #0e1421; padding: 1px 5px; border-radius: 4px; }
+.banner code { font-family: var(--mono); background: #0e1421; padding: 1px 5px; border-radius: 4px; }
 :root[data-theme="light"] .banner.ok { background: #e6f4ea; border-color: #b6dcc1; color: #1d6b39; }
 :root[data-theme="light"] .banner.err { background: #fbeaea; border-color: #e3b4b4; color: #a02a2a; }
 :root[data-theme="light"] .banner.info { background: #eef3fb; border-color: #cdd9ee; color: #3a4a63; }
