@@ -203,6 +203,8 @@ export default function App() {
 
       {view === "valuation" && <ValuationView valuation={snap?.valuation} />}
 
+      {view === "sources" && <SourcesView sources={snap?.sources} />}
+
       <footer className="foot muted">
         Data: FRED ({snap?.fred_mode === "api" ? "API" : "keyless CSV"}) · FINRA · FMP{" "}
         {snap?.fmp_enabled ? "on" : "off"} · multpl (CAPE). Signals are rule-based, not financial advice.
