@@ -76,7 +76,7 @@ export default function SemisView({ semis }) {
                   <td>{signed(c.pct_from_high)}</td>
                   <td>{signed(c.m1)}</td>
                   <td>{signed(c.y1)}</td>
-                  <td>{c.pe != null ? num(c.pe, 1) : <span className="muted">—</span>}</td>
+                  <td>{c.fwd_pe != null ? num(c.fwd_pe, 1) : <span className="muted">—</span>}</td>
                   <td>{signed(c.rev_yoy)}</td>
                   <td className="ne">{c.next_earnings ? fmtDate(c.next_earnings) : <span className="muted">—</span>}</td>
                 </tr>
