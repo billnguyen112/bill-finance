@@ -48,8 +48,8 @@ export default function SignalsView({ playbook }) {
       {pending > 0 && (
         <div className="banner info">
           {fmp_enabled ? (
-            <>{pending} signal{pending > 1 ? "s" : ""} couldn't be computed — FMP returned no data
-            (its free tier may not cover these endpoints). Being switched to free-tier endpoints.</>
+            <>{pending} signal{pending > 1 ? "s" : ""} couldn't be computed this run — the FMP free
+            daily limit (250 requests) was likely reached. They refresh on the next run.</>
           ) : (
             <>{pending} signal{pending > 1 ? "s" : ""} awaiting a data source. Add an <code>FMP_API_KEY</code> repo
             secret (free Financial Modeling Prep key) to compute the sector & earnings signals.</>

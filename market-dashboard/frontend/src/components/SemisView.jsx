@@ -70,6 +70,7 @@ export default function SemisView({ semis }) {
                 <tr key={c.symbol}>
                   <td className="l">
                     <span className="sym">{c.symbol}</span>
+                    {c.stale && <span className="stale-tag" title="cached from last refresh">cached</span>}
                     <span className="cname">{c.name} · {c.role}</span>
                   </td>
                   <td>{c.price != null ? `$${num(c.price, 2)}` : "—"} <span className="mc">{mcap(c.market_cap)}</span></td>

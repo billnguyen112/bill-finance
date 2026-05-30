@@ -24,6 +24,14 @@ def _meta(row) -> dict:
     return dict(zip(keys, row))
 
 
+def _load_prev_snapshot() -> dict | None:
+    """Last published snapshot (downloaded by the workflow), for cache fallback."""
+    try:
+        return json.loads((config.DATA_DIR / "prev_snapshot.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def _fetch(fid: str):
     try:
         return fid, sources.fred_series(fid), None
@@ -111,7 +119,10 @@ def build(verbose: bool = False) -> dict:
         })
 
     # Semiconductor monitor — also feeds the semi signals (no duplicate calls).
-    semis = semis_mod.build_semis()
+    # Pass the previously published snapshot so names the FMP daily limit blocks
+    # fall back to last-good values instead of blanking.
+    prev_snapshot = _load_prev_snapshot()
+    semis = semis_mod.build_semis(prev=(prev_snapshot or {}).get("semis"))
 
     # Extra data for the buy/sell signal model.
     extras = {"margin": sources.finra_margin_debt()}

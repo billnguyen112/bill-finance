@@ -79,10 +79,11 @@ def _one(item) -> dict:
         "above_200dma": (price > a200) if price and a200 else None,
         "m1": _r(pc.get("1M")), "m3": _r(pc.get("3M")), "y1": _r(pc.get("1Y")),
         "rev_yoy": rev_yoy, "rev_qoq": rev_qoq, "next_earnings": nxt,
+        "stale": False,
     }
 
 
-def build_semis() -> dict | None:
+def build_semis(prev: dict | None = None) -> dict | None:
     if not config.FMP_API_KEY:
         return None
     with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
@@ -92,6 +93,13 @@ def build_semis() -> dict | None:
         if c.get("price") is None:
             time.sleep(0.4)
             companies[i] = _one(SEMI_TICKERS[i])
+    # Backfill anything still missing (e.g. daily FMP limit reached) from the
+    # last published snapshot, marked stale — better than blank cells.
+    if prev and prev.get("companies"):
+        pmap = {c.get("symbol"): c for c in prev["companies"]}
+        for i, c in enumerate(companies):
+            if c.get("price") is None and c["symbol"] in pmap:
+                companies[i] = {**pmap[c["symbol"]], "stale": True}
     companies.sort(key=lambda c: (c.get("market_cap") or 0), reverse=True)
     n = len(companies)
 
