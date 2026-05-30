@@ -113,58 +113,77 @@ def finra_margin_debt() -> list[tuple[str, float]] | None:
     return out or None
 
 
-# --- Financial Modeling Prep (free key) ------------------------------------
-def fmp_get(path: str):
-    """GET an FMP v3 endpoint as JSON, or None if no key / on error."""
+# --- Financial Modeling Prep (free key, "stable" API) ----------------------
+def fmp_stable(endpoint: str, **params):
+    """GET an FMP /stable endpoint as parsed JSON, or None (no key / error)."""
     if not config.FMP_API_KEY:
         return None
-    sep = "&" if "?" in path else "?"
-    url = f"{config.FMP_BASE}/{path}{sep}apikey={config.FMP_API_KEY}"
+    params["apikey"] = config.FMP_API_KEY
+    url = f"{config.FMP_BASE}/{endpoint}?{urllib.parse.urlencode(params)}"
     try:
-        return json.loads(_get(url, retries=2))  # fail fast — don't burn retries
+        data = json.loads(_get(url, retries=2))  # fail fast — don't burn retries
     except Exception:
         return None
-
-
-def fmp_sectors() -> list[dict] | None:
-    """Sector performance: [{'sector': 'Technology', 'change': 1.2}, ...]."""
-    data = fmp_get("sectors-performance")
-    if not isinstance(data, list) or not data:
+    if isinstance(data, dict) and ("Error Message" in data or "error" in data):
         return None
-    out = []
-    for d in data:
-        raw = str(d.get("changesPercentage", "")).replace("%", "").strip()
-        try:
-            out.append({"sector": d.get("sector", "?"), "change": float(raw)})
-        except ValueError:
-            continue
-    return out or None
+    return data
 
 
-def fmp_revenue_growth_yoy(ticker: str) -> float | None:
-    """Latest-quarter revenue vs the same quarter a year ago, in percent."""
-    data = fmp_get(f"income-statement/{ticker}?period=quarter&limit=5")
-    if not isinstance(data, list) or len(data) < 5:
+def fmp_quote(symbol: str) -> dict | None:
+    d = fmp_stable("quote", symbol=symbol)
+    return d[0] if isinstance(d, list) and d else None
+
+
+def fmp_price_change(symbol: str) -> dict | None:
+    d = fmp_stable("stock-price-change", symbol=symbol)
+    return d[0] if isinstance(d, list) and d else None
+
+
+def fmp_pe(symbol: str) -> float | None:
+    """Trailing P/E (the stable `quote` endpoint doesn't carry it)."""
+    d = fmp_stable("ratios-ttm", symbol=symbol)
+    if not isinstance(d, list) or not d:
         return None
-    try:
-        cur = float(data[0]["revenue"])
-        yago = float(data[4]["revenue"])
-        if yago:
-            return round((cur / yago - 1) * 100, 1)
-    except (KeyError, ValueError, TypeError):
-        return None
-    return None
-
-
-def fmp_pe_ttm(ticker: str) -> float | None:
-    data = fmp_get(f"ratios-ttm/{ticker}")
-    if not isinstance(data, list) or not data:
-        return None
-    pe = data[0].get("peRatioTTM")
+    pe = d[0].get("priceToEarningsRatioTTM")
     try:
         return round(float(pe), 1) if pe is not None else None
     except (ValueError, TypeError):
         return None
+
+
+def fmp_income_quarterly(symbol: str, limit: int = 6) -> list:
+    d = fmp_stable("income-statement", symbol=symbol, period="quarter", limit=limit)
+    return d if isinstance(d, list) else []
+
+
+def fmp_next_earnings(symbol: str) -> str | None:
+    """Next scheduled earnings date (ISO), or None."""
+    from datetime import date
+    d = fmp_stable("earnings", symbol=symbol, limit=5)
+    if not isinstance(d, list):
+        return None
+    today = date.today().isoformat()
+    upcoming = [e.get("date") for e in d
+                if e.get("date") and e["date"] >= today and e.get("epsActual") is None]
+    return min(upcoming) if upcoming else None
+
+
+def fmp_sectors() -> list[dict] | None:
+    """Latest sector performance (percent), averaged across exchanges:
+    [{'sector': 'Technology', 'change': 1.2}, ...]."""
+    from datetime import date, timedelta
+    for back in range(0, 7):
+        d = (date.today() - timedelta(days=back)).isoformat()
+        data = fmp_stable("sector-performance-snapshot", date=d)
+        if isinstance(data, list) and data:
+            agg: dict[str, list] = {}
+            for row in data:
+                s, c = row.get("sector"), row.get("averageChange")
+                if s is None or c is None:
+                    continue
+                agg.setdefault(s, []).append(c)
+            return [{"sector": s, "change": round(sum(v) / len(v), 3)} for s, v in agg.items()]
+    return None
 
 
 def shiller_cape() -> float | None:

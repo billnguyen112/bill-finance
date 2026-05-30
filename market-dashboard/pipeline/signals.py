@@ -83,7 +83,7 @@ def _leading_sectors(metrics, cape, ex):
     ranked = sorted(sectors, key=lambda s: s["change"], reverse=True)
     dispersion = ranked[0]["change"] - ranked[-1]["change"]
     leaders = [s for s in ranked[:3] if s["change"] > 0]
-    clear = dispersion >= 3.0 and len(leaders) >= 1
+    clear = dispersion >= 1.0 and len(leaders) >= 1
     lead_txt = ", ".join(f"{s['sector']} {s['change']:+.1f}%" for s in leaders[:3]) or "none positive"
     return _auto(clear, f"Leaders: {lead_txt}; dispersion {dispersion:.1f}%")
 
