@@ -6,6 +6,7 @@ over time, for the trend chart).
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import config
@@ -20,22 +21,40 @@ def _meta(row) -> dict:
     return dict(zip(keys, row))
 
 
+def _fetch(fid: str):
+    try:
+        return fid, sources.fred_series(fid), None
+    except Exception as exc:
+        return fid, [], f"{type(exc).__name__}: {exc}"
+
+
 def build(verbose: bool = False) -> dict:
     config.ensure_dirs()
     metrics_by_key: dict[str, dict] = {}
     errors: list[dict] = []
 
+    # Fetch every FRED series (data + curve tenors) concurrently — sequential
+    # fetches with retries can take minutes; in parallel the run is bounded by
+    # the single slowest feed, not their sum.
+    all_ids = list(dict.fromkeys(
+        [_meta(r)["fred_id"] for r in config.SERIES] + [fid for _, fid in config.CURVE]
+    ))
+    fetched: dict[str, tuple] = {}
+    with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
+        for fid, obs, err in ex.map(_fetch, all_ids):
+            fetched[fid] = (obs, err)
+
     for row in config.SERIES:
         meta = _meta(row)
-        try:
-            obs = sources.fred_series(meta["fred_id"])
+        obs, err = fetched.get(meta["fred_id"], ([], "not fetched"))
+        if err:
+            metric = {**{k: meta[k] for k in ("key", "label", "section", "unit")},
+                      "status": "error", "error": err}
+            errors.append({"key": meta["key"], "error": err})
+        else:
             metric = indicators.build_metric(meta, obs)
             if metric.get("status") != "ok":
                 errors.append({"key": meta["key"], "error": metric.get("error", "no data")})
-        except Exception as exc:
-            metric = {**{k: meta[k] for k in ("key", "label", "section", "unit")},
-                      "status": "error", "error": f"{type(exc).__name__}: {exc}"}
-            errors.append({"key": meta["key"], "error": metric["error"]})
         sig = analyze.signal_for(metric)
         if sig:
             metric["signal"] = sig
@@ -54,12 +73,9 @@ def build(verbose: bool = False) -> dict:
     # Yield curve (best effort; tolerate missing tenors)
     curve = []
     for tenor, fid in config.CURVE:
-        try:
-            obs = sources.fred_series(fid)
-            if obs:
-                curve.append({"tenor": tenor, "value": round(obs[-1][1], 2), "date": obs[-1][0]})
-        except Exception:
-            continue
+        obs, _ = fetched.get(fid, ([], None))
+        if obs:
+            curve.append({"tenor": tenor, "value": round(obs[-1][1], 2), "date": obs[-1][0]})
 
     overall = analyze.overall_read(metrics_by_key)
 

@@ -20,8 +20,10 @@ HISTORY_PATH = DATA_DIR / "history.json"     # overall score over time
 FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 
 # Network resilience (FRED is reliable from normal IPs; tune for slow links).
-HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "30"))
-HTTP_RETRIES = int(os.environ.get("HTTP_RETRIES", "4"))
+HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "25"))
+HTTP_RETRIES = int(os.environ.get("HTTP_RETRIES", "3"))
+# Series are fetched concurrently; total time ≈ the slowest single feed.
+FETCH_WORKERS = int(os.environ.get("FETCH_WORKERS", "8"))
 
 SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "8000"))

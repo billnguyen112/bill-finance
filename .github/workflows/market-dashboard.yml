@@ -24,6 +24,7 @@ concurrency:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15      # hard cap so a slow data source can never hang the run
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
