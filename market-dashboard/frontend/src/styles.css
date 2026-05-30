@@ -119,4 +119,23 @@ body {
 .t-note { font-size: 11.5px; color: #aab2bf; line-height: 1.35; }
 .t-asof { font-size: 10.5px; color: #5f6875; font-family: var(--mono); }
 
+/* Explanation layer */
+.info-btn {
+  background: none; border: none; color: var(--accent); cursor: pointer;
+  font-size: 12px; padding: 0 0 0 5px; opacity: .65; line-height: 1;
+}
+.info-btn:hover { opacity: 1; }
+.section-head { display: flex; align-items: center; gap: 4px; }
+.section-explain {
+  font-size: 13px; color: #c7cdd8; margin: 0 0 10px; padding: 10px 12px;
+  background: var(--card-2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+}
+.t-explain {
+  font-size: 11.5px; line-height: 1.4; color: #c2c9d4; margin: 2px 0;
+  padding: 8px 10px; background: #11161e; border: 1px solid var(--line); border-radius: 8px;
+}
+.t-explain p { margin: 0 0 5px; }
+.t-explain p:last-child { margin: 0; }
+.t-explain .how b { color: var(--accent-2); }
+
 .foot { margin-top: 26px; text-align: center; font-size: 12px; }

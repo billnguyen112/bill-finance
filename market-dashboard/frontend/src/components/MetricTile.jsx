@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import Sparkline from "./Sparkline.jsx";
 import { fmtHeadline, changeDisplay, scoreColor, fmtDate } from "../format.js";
 
@@ -14,6 +14,7 @@ function Delta({ m, horizon, label }) {
 }
 
 export default function MetricTile({ m }) {
+  const [open, setOpen] = useState(false);
   if (m.status !== "ok") {
     return (
       <div className="tile err" title={m.error}>
@@ -27,9 +28,21 @@ export default function MetricTile({ m }) {
   return (
     <div className="tile">
       <div className="t-top">
-        <span className="t-label">{m.label}</span>
+        <span className="t-label">
+          {m.label}
+          {m.explain && (
+            <button className="info-btn" onClick={() => setOpen((o) => !o)}
+                    aria-label="What this means" title="What this means">ⓘ</button>
+          )}
+        </span>
         {sig && <span className="t-dot" style={{ background: scoreColor(sig.score) }} title={sig.label} />}
       </div>
+      {open && m.explain && (
+        <div className="t-explain">
+          <p>{m.explain.what}</p>
+          <p className="how"><b>How to read:</b> {m.explain.read}</p>
+        </div>
+      )}
       <div className="t-value">{fmtHeadline(m)}</div>
       <div className="t-deltas">
         <Delta m={m} horizon="1w" label="1w" />

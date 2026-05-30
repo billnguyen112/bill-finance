@@ -1,9 +1,29 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { getSnapshot, getHistory, refresh } from "./api.js";
+import { getSnapshot, getHistory, refresh, probeBackend, actionsUrl } from "./api.js";
 import { scoreColor, fmtDateTime, num } from "./format.js";
 import MetricTile from "./components/MetricTile.jsx";
 import CurveChart from "./components/CurveChart.jsx";
 import ScoreHistory from "./components/ScoreHistory.jsx";
+
+function SectionCard({ sec }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="card section">
+      <div className="section-head">
+        <h3>{sec.label}</h3>
+        {sec.explain && (
+          <button className="info-btn" onClick={() => setOpen((o) => !o)}
+                  title="What this section covers">ⓘ</button>
+        )}
+      </div>
+      {open && sec.explain && <p className="section-explain">{sec.explain}</p>}
+      {sec.summary && <p className="section-summary">{sec.summary}</p>}
+      <div className="tiles">
+        {sec.metrics.map((m) => <MetricTile key={m.key} m={m} />)}
+      </div>
+    </section>
+  );
+}
 
 function Gauge({ score }) {
   // -1..+1 mapped to 0..100% along a red->amber->green track.
@@ -23,6 +43,9 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
+  const [backend, setBackend] = useState(null); // null=unknown, true/false once probed
+
+  useEffect(() => { probeBackend().then(setBackend); }, []);
 
   const load = useCallback(async () => {
     try {
@@ -62,20 +85,27 @@ export default function App() {
         </div>
         <div className="controls">
           {snap && <span className="asof muted">updated {fmtDateTime(snap.generated_at)}</span>}
-          <button className="btn primary" disabled={refreshing} onClick={doRefresh}>
-            {refreshing ? "Scraping…" : "↻ Refresh data"}
-          </button>
+          {backend === false && actionsUrl() ? (
+            <a className="btn primary" href={actionsUrl()} target="_blank" rel="noreferrer"
+               title="Opens GitHub Actions — click Run workflow to rescrape">
+              ↻ Refresh via GitHub Actions ↗
+            </a>
+          ) : (
+            <button className="btn primary" disabled={refreshing || backend === false} onClick={doRefresh}>
+              {refreshing ? "Scraping…" : "↻ Refresh data"}
+            </button>
+          )}
         </div>
       </header>
 
       {status && <div className="banner ok">{status}</div>}
       {error && (
         <div className="banner err">
-          {error.includes("no snapshot")
+          {backend === false
+            ? "No data published yet — open the Actions tab and click “Run workflow”, then reload."
+            : error.includes("no snapshot")
             ? "No data yet — click Refresh data, or run `python pipeline/run.py refresh`."
-            : error.includes("api") || error.includes("/api")
-            ? "Can't reach the backend. Start it: `python pipeline/server.py`."
-            : error}
+            : "Can't reach the backend. Start it: `python pipeline/server.py`."}
         </div>
       )}
 
@@ -126,17 +156,7 @@ export default function App() {
         </section>
       )}
 
-      {snap?.sections?.map((sec) => (
-        <section className="card section" key={sec.key}>
-          <div className="section-head">
-            <h3>{sec.label}</h3>
-          </div>
-          {sec.summary && <p className="section-summary">{sec.summary}</p>}
-          <div className="tiles">
-            {sec.metrics.map((m) => <MetricTile key={m.key} m={m} />)}
-          </div>
-        </section>
-      ))}
+      {snap?.sections?.map((sec) => <SectionCard key={sec.key} sec={sec} />)}
 
       <footer className="foot muted">
         Data: FRED (fredgraph.csv, no key) + multpl.com (CAPE). Signals are rule-based, not financial advice.

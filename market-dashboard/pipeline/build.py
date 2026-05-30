@@ -12,6 +12,7 @@ import config
 import sources
 import indicators
 import analyze
+import explanations
 
 
 def _meta(row) -> dict:
@@ -38,6 +39,9 @@ def build(verbose: bool = False) -> dict:
         sig = analyze.signal_for(metric)
         if sig:
             metric["signal"] = sig
+        explain = explanations.VARIABLE.get(meta["key"])
+        if explain:
+            metric["explain"] = explain
         metrics_by_key[meta["key"]] = metric
         if verbose:
             st = metric.get("status")
@@ -69,6 +73,7 @@ def build(verbose: bool = False) -> dict:
             "key": skey,
             "label": slabel,
             "summary": analyze.section_summary(skey, metrics_by_key),
+            "explain": explanations.SECTION.get(skey, ""),
             "metrics": sec_metrics,
         })
 
