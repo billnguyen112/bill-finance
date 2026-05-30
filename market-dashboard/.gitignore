@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Secrets
+.env
+
+# Generated data (transcripts + analyses). Remove these lines if you want to
+# commit the analysed dataset (e.g. for static hosting / sharing).
+data/raw/*.json
+data/analyses/*.json
+data/index.json
+data/trends.json
