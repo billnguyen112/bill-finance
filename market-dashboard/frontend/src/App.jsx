@@ -46,8 +46,14 @@ export default function App() {
   const [status, setStatus] = useState(null);
   const [backend, setBackend] = useState(null); // null=unknown, true/false once probed
   const [view, setView] = useState("dashboard"); // "dashboard" | "signals"
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
 
   useEffect(() => { probeBackend().then(setBackend); }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   const load = useCallback(async () => {
     try {
@@ -86,6 +92,10 @@ export default function App() {
           <span className="sub">A weekly macro read, built from raw data — rates · inflation · credit · equities · housing · labor · commodities</span>
         </div>
         <div className="controls">
+          <button className="btn ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  title="Toggle light / dark" aria-label="Toggle theme">
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
           {snap && <span className="asof muted">updated {fmtDateTime(snap.generated_at)}</span>}
           {backend === false && actionsUrl() ? (
             <a className="btn primary" href={actionsUrl()} target="_blank" rel="noreferrer"

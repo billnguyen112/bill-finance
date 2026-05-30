@@ -86,6 +86,85 @@ def _fred_csv(series_id: str) -> list[tuple[str, float]]:
     return out
 
 
+_MARGIN_ROW = re.compile(
+    r"<td>([A-Z][a-z]{2}-\d{2})</td>\s*<td>([\d,]+)</td>", re.I
+)
+
+
+def finra_margin_debt() -> list[tuple[str, float]] | None:
+    """Scrape FINRA's monthly margin-debt table (no key).
+
+    Returns [(month_label, debit_balance_millions), ...] most-recent first, or
+    None if unavailable.
+    """
+    try:
+        html = _get(config.FINRA_MARGIN_URL)
+    except Exception:
+        return None
+    rows = _MARGIN_ROW.findall(html)
+    out = []
+    for label, val in rows:
+        try:
+            out.append((label, float(val.replace(",", ""))))
+        except ValueError:
+            continue
+    return out or None
+
+
+# --- Financial Modeling Prep (free key) ------------------------------------
+def fmp_get(path: str):
+    """GET an FMP v3 endpoint as JSON, or None if no key / on error."""
+    if not config.FMP_API_KEY:
+        return None
+    sep = "&" if "?" in path else "?"
+    url = f"{config.FMP_BASE}/{path}{sep}apikey={config.FMP_API_KEY}"
+    try:
+        return json.loads(_get(url))
+    except Exception:
+        return None
+
+
+def fmp_sectors() -> list[dict] | None:
+    """Sector performance: [{'sector': 'Technology', 'change': 1.2}, ...]."""
+    data = fmp_get("sectors-performance")
+    if not isinstance(data, list) or not data:
+        return None
+    out = []
+    for d in data:
+        raw = str(d.get("changesPercentage", "")).replace("%", "").strip()
+        try:
+            out.append({"sector": d.get("sector", "?"), "change": float(raw)})
+        except ValueError:
+            continue
+    return out or None
+
+
+def fmp_revenue_growth_yoy(ticker: str) -> float | None:
+    """Latest-quarter revenue vs the same quarter a year ago, in percent."""
+    data = fmp_get(f"income-statement/{ticker}?period=quarter&limit=5")
+    if not isinstance(data, list) or len(data) < 5:
+        return None
+    try:
+        cur = float(data[0]["revenue"])
+        yago = float(data[4]["revenue"])
+        if yago:
+            return round((cur / yago - 1) * 100, 1)
+    except (KeyError, ValueError, TypeError):
+        return None
+    return None
+
+
+def fmp_pe_ttm(ticker: str) -> float | None:
+    data = fmp_get(f"ratios-ttm/{ticker}")
+    if not isinstance(data, list) or not data:
+        return None
+    pe = data[0].get("peRatioTTM")
+    try:
+        return round(float(pe), 1) if pe is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
 def shiller_cape() -> float | None:
     """Best-effort scrape of the current Shiller CAPE (CAPE/PE10) ratio."""
     try:

@@ -50,6 +50,7 @@ jobs:
       - name: Scrape data + compute snapshot
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
         run: python pipeline/run.py refresh
 
       - uses: actions/setup-node@v4

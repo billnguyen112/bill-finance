@@ -1,133 +1,85 @@
 # Market Monitor
 
-A dashboard that produces a weekly macro market read **independently** — the
-kind of walk-through Mark Meldrum does in his videos, but built from raw data
-the app scrapes itself, interpreted by a transparent rule engine.
+A self-updating macro dashboard that scrapes market & economic data and turns it
+into a transparent, **rule-based** read — no LLM, no subjective inputs. Two tabs:
 
-**No API keys. No LLM.** All data comes from public, key-free sources, and the
-"analysis" is explicit, auditable thresholds you can read and tune.
+- **Dashboard** — rates, inflation, credit spreads, equities/volatility, housing,
+  labor, commodities & the dollar, plus the Treasury yield curve and an overall
+  risk-on/risk-off score.
+- **Signals** — a data-driven **buy/sell model** (5 buy, 3 sell conditions), each
+  computed from a live data source with a Triggered / Not-yet / Awaiting-data state.
 
-It covers the same ground he does each week:
+Everything on screen is computed; thresholds live in plain Python (`config.py`,
+`analyze.py`, `signals.py`) and are fully tunable.
 
-> Rates & the Fed · Inflation (CPI/PCE/PPI) · Credit spreads (IG & HY OAS) ·
-> Equities & volatility (S&P, Nasdaq, VIX, CAPE) · Housing · Labor & growth ·
-> Commodities & the dollar — plus the Treasury yield curve and an overall
-> risk-on/risk-off read.
+## Data sources & keys
 
-## How it works
+| Source | Used for | Key? |
+|---|---|---|
+| **FRED** (St. Louis Fed) | All macro series (rates, inflation, credit, equities, housing, labor, commodities) | Free key for cloud/CI — [get one](https://fredaccount.stlouisfed.org/apikeys). Keyless locally. |
+| **FINRA** margin statistics | Margin-debt buy signal | None (scraped) |
+| **Financial Modeling Prep** (FMP) | Sector performance, sector/tech earnings, tech valuation (3 signals) | Free key — [get one](https://site.financialmodelingprep.com/developer/docs) |
+| multpl.com | Shiller CAPE (valuation fallback) | None (scraped) |
 
-```
-FRED  fredgraph.csv?id=…  (no key) ─┐
-multpl.com  (Shiller CAPE)         ─┤→ sources.py   scrape series
-                                    │  indicators.py compute latest, 1w/1m/1y
-                                    │                changes, YoY, sparkline, stats
-                                    │  analyze.py    rule engine → per-series signals,
-                                    │                section summaries, overall read
-                                    │  build.py      → data/snapshot.json + history.json
-                                    │
-            server.py (Flask) ──────┤  /api/snapshot  /api/history  /api/refresh
-                                    │
-React + Vite dashboard ─────────────┘  risk gauge · yield curve · metric tiles
-                                       with sparklines · computed commentary
-```
+Without the FMP key the dashboard still runs; the three sector/earnings signals
+just report **“awaiting data”** until you add it.
 
-The overall read is a weighted blend of regime signals — yield-curve inversion,
-HY credit spreads, VIX, the 10Y real yield, equity momentum vs the 1-year high,
-core inflation vs target, and the labor trend — scored from -1 (risk-off) to
-+1 (risk-on). Every number on screen carries a one-line, rule-derived note.
+## Run it with zero local tools (GitHub Pages)
 
-## Quick start
+The included workflow scrapes, builds, and publishes everything in GitHub's cloud:
 
-### 1. Pull the data (Python)
+1. **Add repo secrets** (Settings → Secrets and variables → Actions):
+   - `FRED_API_KEY` — required for reliable cloud fetches.
+   - `FMP_API_KEY` — to populate the sector/earnings/valuation signals.
+2. **Enable Pages:** Settings → Pages → Source → **GitHub Actions**.
+3. **Run it:** Actions → *Market Dashboard* → **Run workflow** (also runs weekly).
+   When green, open `https://<user>.github.io/<repo>/`.
+
+Refresh anytime from the Actions tab; it also auto-refreshes every Monday.
+
+## Run locally
 
 ```bash
 cd market-dashboard
 python -m venv .venv && source .venv/bin/activate
 pip install -r pipeline/requirements.txt
+cp .env.example .env        # optional: add FRED_API_KEY / FMP_API_KEY
 
 cd pipeline
-python run.py refresh        # scrape all series, compute, write data/snapshot.json
+python run.py refresh        # scrape + compute -> data/snapshot.json
+python server.py             # dashboard at http://127.0.0.1:8000
 ```
 
-`refresh` prints a per-series status and the overall read. No keys needed.
+Frontend dev with hot reload: `cd frontend && npm install && npm run dev`
+(proxies the API to the Flask backend on :8000).
 
-### 2. Run the dashboard
+## The buy/sell signal model
 
-Build the frontend once, then let Flask serve everything from one port:
+**Buy:** ① VIX > 30 ② Fed funds not rising ③ FINRA margin debt falling
+④ clear leading sectors ⑤ leading sectors' earnings growth
+**Sell:** ① semiconductor earnings plateau ② Fed official easing pivot
+③ extreme tech/semi valuation
 
-```bash
-cd frontend && npm install && npm run build
-cd ../pipeline && python server.py        # open http://127.0.0.1:8000
-```
-
-The **↻ Refresh data** button re-scrapes and recomputes on demand.
-
-For frontend development with hot reload (proxies the API to Flask on :8000):
-
-```bash
-cd pipeline && python server.py           # terminal 1
-cd frontend && npm run dev                # terminal 2 -> http://localhost:5174
-```
-
-## What you can tune
-
-Everything lives in plain Python, no magic:
-
-- **`pipeline/config.py`** — the `SERIES` catalog (add/remove any FRED series),
-  the section layout, and the yield-curve tenors.
-- **`pipeline/analyze.py`** — the `signal_for()` rules (thresholds for "hot"
-  inflation, "stress" credit spreads, VIX regimes, etc.) and the
-  `_REGIME_WEIGHTS` that drive the overall score.
-
-Want another indicator he watches? Find its FRED series id (e.g. `T10Y3M`,
-`UMCSENT`, `RSAFS`) and add a row to `SERIES`.
-
-## Data sources
-
-- **FRED** (Federal Reserve Bank of St. Louis) — full history for any series.
-  - **Locally:** uses the public `fredgraph.csv` endpoint, no key needed.
-  - **Cloud/CI:** FRED throttles that endpoint from datacenter IPs, so set a
-    free **FRED API key** (`FRED_API_KEY`) and the pipeline uses the official
-    API instead — fast and reliable. Get one in ~2 min:
-    https://fredaccount.stlouisfed.org/apikeys
-- **multpl.com** — current Shiller CAPE (best-effort scrape).
-
-## Deploying to GitHub Pages (no local tools)
-
-The included workflow (`.github/workflows/market-dashboard.yml`) scrapes,
-builds, and publishes the dashboard entirely in GitHub's cloud — operate it
-from the browser:
-
-1. **Get a free FRED key:** https://fredaccount.stlouisfed.org/apikeys
-2. **Add it as a repo secret:** Settings → Secrets and variables → Actions →
-   New repository secret → name `FRED_API_KEY`, paste the key.
-3. **Enable Pages:** Settings → Pages → Source → **GitHub Actions**.
-4. **Run it:** Actions tab → *Market Dashboard* → **Run workflow** (also runs
-   weekly). When green, open `https://<user>.github.io/<repo>/`.
+①–③ buy and ② sell come from FRED + FINRA (no extra key). ④⑤ buy and ①③ sell
+use FMP. Thresholds (e.g. `VALUATION_PE_EXTREME`, `PLATEAU_REV_GROWTH`, the semis
+basket, sector bellwethers) are in `config.py`.
 
 ## Layout
 
 ```
 market-dashboard/
 ├── pipeline/
-│   ├── config.py       # series catalog, sections, curve tenors, settings
-│   ├── sources.py      # FRED CSV + CAPE scrapers (retries, no keys)
-│   ├── indicators.py   # latest / changes / YoY / sparkline / 1y-5y stats
-│   ├── analyze.py      # rule engine: per-series signals + overall read
-│   ├── build.py        # orchestrate -> snapshot.json + history.json
+│   ├── config.py       # series catalog, signal thresholds, keys, baskets
+│   ├── sources.py      # FRED (API/CSV), FINRA, FMP, CAPE scrapers
+│   ├── indicators.py   # latest / changes / YoY / sparkline / stats
+│   ├── analyze.py      # macro rule engine (dashboard signals + overall read)
+│   ├── signals.py      # buy/sell signal model (Signals tab)
+│   ├── explanations.py # plain-English notes per variable/section
+│   ├── build.py        # orchestrate -> data/snapshot.json + history.json
 │   ├── run.py          # CLI: refresh / serve
 │   └── server.py       # Flask API + serves the built frontend
-├── frontend/           # React + Vite dashboard
+├── frontend/           # React + Vite dashboard (dark / light)
 └── data/               # generated snapshot/history (gitignored)
 ```
 
-## Scheduling (optional)
-
-`python run.py refresh` is a plain command, so a weekly cron or GitHub Action
-that runs it and commits `data/` makes the dashboard update itself. Set up as
-manual-trigger (button + CLI) for now.
-
----
-
-*Signals are rule-based and for informational use only — not financial advice.
-Independent project, not affiliated with Mark Meldrum.*
+*Informational only — not financial advice.*

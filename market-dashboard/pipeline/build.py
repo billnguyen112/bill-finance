@@ -94,7 +94,24 @@ def build(verbose: bool = False) -> dict:
             "metrics": sec_metrics,
         })
 
-    playbook = signals_mod.build_playbook(metrics_by_key, cape, overall)
+    # Extra data for the buy/sell signal model.
+    extras = {"margin": sources.finra_margin_debt()}
+    if config.FMP_API_KEY:
+        sectors = sources.fmp_sectors()
+        extras["sectors"] = sectors
+        extras["semis_pe"] = [pe for t in config.SEMIS_BASKET
+                              if (pe := sources.fmp_pe_ttm(t)) is not None]
+        extras["semis_rev"] = [g for t in config.SEMIS_BASKET
+                               if (g := sources.fmp_revenue_growth_yoy(t)) is not None]
+        leaders = []
+        for s in sorted(sectors or [], key=lambda x: x["change"], reverse=True)[:2]:
+            if s["change"] > 0:
+                tkr = config.SECTOR_BELLWETHERS.get(s["sector"])
+                g = sources.fmp_revenue_growth_yoy(tkr) if tkr else None
+                if g is not None:
+                    leaders.append(g)
+        extras["leaders_growth"] = sum(leaders) / len(leaders) if leaders else None
+    playbook = signals_mod.build_playbook(metrics_by_key, cape, overall, extras)
 
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
