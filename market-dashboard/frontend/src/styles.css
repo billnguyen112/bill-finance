@@ -238,5 +238,6 @@ body {
 .semis-table .pos { color: var(--green); }
 .semis-table .neg { color: var(--red); }
 .semis-table .ne { color: var(--accent-2); }
+.stale-tag { font-family: system-ui, sans-serif; font-size: 9px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: middle; }
 
 .foot { margin-top: 26px; text-align: center; font-size: 12px; }
