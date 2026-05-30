@@ -59,7 +59,9 @@ PLATEAU_REV_GROWTH = float(os.environ.get("PLATEAU_REV_GROWTH", "5"))
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "25"))
 HTTP_RETRIES = int(os.environ.get("HTTP_RETRIES", "3"))
 # Series are fetched concurrently; total time ≈ the slowest single feed.
-FETCH_WORKERS = int(os.environ.get("FETCH_WORKERS", "8"))
+# Kept moderate so a burst doesn't trip FRED's rate limiter (a sequential
+# straggler-retry pass in build.py recovers any that still drop).
+FETCH_WORKERS = int(os.environ.get("FETCH_WORKERS", "5"))
 
 SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "8000"))
