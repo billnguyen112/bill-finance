@@ -1,11 +1,14 @@
 """Configuration for the market dashboard.
 
-The dashboard independently reproduces the kind of weekly macro read Mark
-Meldrum does — but from raw data, scraped without API keys, and interpreted by
-a transparent rule engine (no LLM).
+A macro market read built from raw data and a transparent rule engine (no LLM).
 
-Primary source: FRED (Federal Reserve Economic Data) — its CSV download
-endpoint `fredgraph.csv?id=<series>` is public and needs no key.
+Sources:
+- FRED (Federal Reserve Economic Data) — macro series. CSV endpoint is keyless
+  locally; cloud/CI uses the free FRED API (FRED_API_KEY).
+- FINRA margin statistics — scraped, no key.
+- Financial Modeling Prep (FMP) — sector performance, earnings, valuation.
+  Needs a free key (FMP_API_KEY) to populate the sector/earnings/valuation
+  signals; without it those signals report "awaiting data".
 """
 
 import os
@@ -21,6 +24,35 @@ FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 # Free key from https://fredaccount.stlouisfed.org/apikeys — required for cloud/CI
 # runs (FRED throttles the keyless CSV endpoint from datacenter IPs).
 FRED_API_KEY = os.environ.get("FRED_API_KEY")
+
+# --- FINRA margin statistics (no key) --------------------------------------
+FINRA_MARGIN_URL = "https://www.finra.org/investors/learn-to-invest/advanced-investing/margin-statistics"
+
+# --- Financial Modeling Prep (free key) ------------------------------------
+# Get one at https://site.financialmodelingprep.com/developer/docs (Free plan).
+# Unlocks the leading-sectors, sector/tech earnings, and tech valuation signals.
+FMP_API_KEY = os.environ.get("FMP_API_KEY")
+FMP_BASE = "https://financialmodelingprep.com/api/v3"
+# Semiconductor / big-tech basket for the valuation + earnings-plateau signals.
+SEMIS_BASKET = ["NVDA", "AVGO", "AMD", "TSM", "MU", "QCOM"]
+# One bellwether per FMP sector name, for "leaders' earnings growth".
+SECTOR_BELLWETHERS = {
+    "Technology": "MSFT",
+    "Communication Services": "GOOGL",
+    "Financial Services": "JPM",
+    "Energy": "XOM",
+    "Healthcare": "UNH",
+    "Consumer Cyclical": "AMZN",
+    "Industrials": "CAT",
+    "Consumer Defensive": "PG",
+    "Utilities": "NEE",
+    "Basic Materials": "LIN",
+    "Real Estate": "PLD",
+}
+# A semis basket trailing P/E above this reads as "crazy" valuation.
+VALUATION_PE_EXTREME = float(os.environ.get("VALUATION_PE_EXTREME", "45"))
+# Median semis YoY revenue growth below this reads as an earnings "plateau".
+PLATEAU_REV_GROWTH = float(os.environ.get("PLATEAU_REV_GROWTH", "5"))
 
 # Network resilience (FRED is reliable from normal IPs; tune for slow links).
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "25"))
