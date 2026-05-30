@@ -8,12 +8,10 @@ venv/
 node_modules/
 frontend/dist/
 
-# Secrets
+# Local env
 .env
 
-# Generated data (transcripts + analyses). Remove these lines if you want to
-# commit the analysed dataset (e.g. for static hosting / sharing).
-data/raw/*.json
-data/analyses/*.json
-data/index.json
-data/trends.json
+# Generated data (scraped + computed). Remove these lines if you want to commit
+# the dataset (e.g. for static hosting / sharing a snapshot).
+data/snapshot.json
+data/history.json

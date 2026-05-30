@@ -1,8 +1,5 @@
-"""Tiny Flask backend for the dashboard.
-
-Serves the aggregated data and exposes a /api/refresh endpoint that the
-dashboard's "Refresh" button calls to run the scrape+analyse pipeline on demand.
-Also serves the built frontend (frontend/dist) when present.
+"""Flask backend: serves the computed snapshot/history and a /api/refresh
+endpoint for the dashboard's refresh button. Also serves the built frontend.
 """
 
 from __future__ import annotations
@@ -10,18 +7,16 @@ from __future__ import annotations
 import json
 import threading
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
 import config
-import run as pipeline
+import build
 
 app = Flask(__name__, static_folder=None)
 CORS(app)
 
-# Guard against overlapping refreshes (the pipeline is not concurrency-safe).
 _refresh_lock = threading.Lock()
-
 _DIST = config.PROJECT_DIR / "frontend" / "dist"
 
 
@@ -34,26 +29,20 @@ def _read_json(path, default):
 
 @app.get("/api/health")
 def health():
-    return jsonify({"ok": True, "provider": config.AI_PROVIDER})
+    return jsonify({"ok": True})
 
 
-@app.get("/api/index")
-def index():
-    return jsonify(_read_json(config.INDEX_PATH, {"videos": [], "count": 0}))
-
-
-@app.get("/api/trends")
-def trends():
-    return jsonify(_read_json(config.TRENDS_PATH, {"sentiment_over_time": []}))
-
-
-@app.get("/api/video/<video_id>")
-def video(video_id: str):
-    path = config.ANALYSES_DIR / f"{video_id}.json"
-    data = _read_json(path, None)
+@app.get("/api/snapshot")
+def snapshot():
+    data = _read_json(config.SNAPSHOT_PATH, None)
     if data is None:
-        return jsonify({"error": "not found"}), 404
+        return jsonify({"error": "no snapshot yet — run a refresh"}), 404
     return jsonify(data)
+
+
+@app.get("/api/history")
+def history():
+    return jsonify(_read_json(config.HISTORY_PATH, {"points": []}))
 
 
 @app.post("/api/refresh")
@@ -61,22 +50,20 @@ def refresh():
     if not _refresh_lock.acquire(blocking=False):
         return jsonify({"error": "a refresh is already running"}), 409
     try:
-        body = request.get_json(silent=True) or {}
-        limit = int(body.get("limit", 1))
-        video_ids = body.get("videos")  # optional list of ids/urls
-        provider = body.get("provider")  # optional override
-        force = bool(body.get("force", False))
-        summary = pipeline.refresh(
-            limit=limit, video_ids=video_ids, provider_name=provider, force=force
-        )
-        return jsonify(summary)
-    except Exception as exc:  # surface a clean error to the UI
+        snap = build.build()
+        return jsonify({
+            "ok_count": snap["ok_count"],
+            "total_count": snap["total_count"],
+            "errors": snap["errors"],
+            "overall": snap["overall"],
+            "generated_at": snap["generated_at"],
+        })
+    except Exception as exc:
         return jsonify({"error": f"{type(exc).__name__}: {exc}"}), 500
     finally:
         _refresh_lock.release()
 
 
-# --- Serve the built frontend (production) ---------------------------------
 @app.get("/")
 @app.get("/<path:path>")
 def static_files(path: str = ""):
@@ -88,6 +75,10 @@ def static_files(path: str = ""):
     return send_from_directory(_DIST, "index.html")
 
 
-if __name__ == "__main__":
+def main() -> None:
     config.ensure_dirs()
     app.run(host=config.SERVER_HOST, port=config.SERVER_PORT, debug=True)
+
+
+if __name__ == "__main__":
+    main()

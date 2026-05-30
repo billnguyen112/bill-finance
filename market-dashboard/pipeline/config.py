@@ -1,77 +1,98 @@
-"""Central configuration for the Mark Meldrum market-update pipeline.
+"""Configuration for the market dashboard.
 
-Everything here is overridable via environment variables so the same code runs
-locally, in CI, or behind the dashboard's refresh button without edits.
+The dashboard independently reproduces the kind of weekly macro read Mark
+Meldrum does — but from raw data, scraped without API keys, and interpreted by
+a transparent rule engine (no LLM).
+
+Primary source: FRED (Federal Reserve Economic Data) — its CSV download
+endpoint `fredgraph.csv?id=<series>` is public and needs no key.
 """
 
 import os
 from pathlib import Path
 
-# --- Paths -----------------------------------------------------------------
 PIPELINE_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = PIPELINE_DIR.parent
 DATA_DIR = Path(os.environ.get("DATA_DIR", PROJECT_DIR / "data"))
-RAW_DIR = DATA_DIR / "raw"            # transcripts + metadata, one json per video
-ANALYSES_DIR = DATA_DIR / "analyses"  # AI breakdown, one json per video
-INDEX_PATH = DATA_DIR / "index.json"  # aggregated list the dashboard reads first
-TRENDS_PATH = DATA_DIR / "trends.json"
+SNAPSHOT_PATH = DATA_DIR / "snapshot.json"   # latest full read (dashboard reads this)
+HISTORY_PATH = DATA_DIR / "history.json"     # overall score over time
 
-# --- Source channel --------------------------------------------------------
-# Mark Meldrum, Ph.D — https://www.youtube.com/@MarkMeldrum
-CHANNEL_ID = os.environ.get("CHANNEL_ID", "UCAHr-sT0AjrD3sBwr1eRUNg")
-CHANNEL_NAME = "Mark Meldrum"
-RSS_URL = f"https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}"
+FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 
-# --- Market-update classification ------------------------------------------
-# His uploads are mostly weekly macro commentary, with a handful of clearly
-# labelled exceptions (CFA-exam content, Q&A, short Pre-Market / Mid-Day clips).
-# Title-based detection is inherently fuzzy because the weekly videos have
-# creative titles, so we maximise recall: treat a video as a weekly market
-# update UNLESS its title matches an exclusion pattern. Anything misclassified
-# can be analysed explicitly with `run.py refresh --video <id>`.
-EXCLUDE_KEYWORDS = [
-    # CFA-exam course content
-    "cfa", "level 1", "level 2", "level 3", "level i ", "level ii", "level iii",
-    "reading", "ethics", "mock", "curriculum", "study session", "exam prep",
-    # not the main weekly macro video
-    "q&a", "q & a", "non-market", "pre-market", "premarket", "mid-day", "midday",
-    "ask me anything", "ama ", "announcement", "webinar",
-]
+# Network resilience (FRED is reliable from normal IPs; tune for slow links).
+HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "30"))
+HTTP_RETRIES = int(os.environ.get("HTTP_RETRIES", "4"))
 
-# --- Spotlight (company deep-dive) trimming --------------------------------
-# The user only wants the macro commentary, not the per-company deep dive that
-# closes each video. We cut the transcript at the first spotlight marker that
-# appears after SPOTLIGHT_MIN_FRACTION of the way through (avoids false hits
-# from an intro mention). Best-effort heuristic; the AI prompt also re-enforces
-# this so a missed cut still won't pollute the analysis.
-SPOTLIGHT_MARKERS = [
-    "spotlight company", "spotlight stock", "company spotlight",
-    "this week's spotlight", "our spotlight", "let's get into the spotlight",
-    "move on to the spotlight", "the spotlight", "deep dive into",
-    "individual company", "let's talk about the company",
-]
-SPOTLIGHT_MIN_FRACTION = float(os.environ.get("SPOTLIGHT_MIN_FRACTION", "0.4"))
-
-# --- AI provider -----------------------------------------------------------
-AI_PROVIDER = os.environ.get("AI_PROVIDER", "anthropic")  # "anthropic" | "stub"
-ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-
-# --- Optional proxy for transcript scraping --------------------------------
-# YouTube blocks transcript requests from datacenter/cloud IPs. Running the
-# pipeline from a residential IP works out of the box; in the cloud, set
-# Webshare rotating-residential credentials (recommended by the library) or a
-# generic HTTP/HTTPS proxy.
-WEBSHARE_PROXY_USERNAME = os.environ.get("WEBSHARE_PROXY_USERNAME")
-WEBSHARE_PROXY_PASSWORD = os.environ.get("WEBSHARE_PROXY_PASSWORD")
-HTTP_PROXY = os.environ.get("YT_HTTP_PROXY")
-HTTPS_PROXY = os.environ.get("YT_HTTPS_PROXY")
-
-# --- Server ----------------------------------------------------------------
 SERVER_HOST = os.environ.get("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "8000"))
 
+# --- Section + series catalog ----------------------------------------------
+# kind drives how a series is read & interpreted:
+#   rate       value is a % yield/rate                 (level shown as %)
+#   spread     value is a % spread                     (level shown as %)
+#   index_yoy  index level; headline = year-over-year % change
+#   price      price level (equities, commodities, FX)
+#   level      raw level (VIX, sales counts, claims)
+#   level_chg  raw level; headline = change vs prior observation
+#
+# better: which direction is "good" for risk assets — used to colour deltas
+#   "up" higher is risk-on, "down" lower is risk-on, "none" neutral.
+
+SECTIONS = [
+    ("rates", "Rates & the Fed"),
+    ("inflation", "Inflation"),
+    ("credit", "Credit Spreads"),
+    ("equities", "Equities & Volatility"),
+    ("housing", "Housing"),
+    ("labor", "Labor & Growth"),
+    ("commodities", "Commodities & Dollar"),
+]
+
+SERIES = [
+    # key,            fred_id,              label,                 section,       kind,        unit,   better
+    ("fed_funds",     "DFF",                "Fed Funds Rate",      "rates",       "rate",      "%",    "none"),
+    ("ust_2y",        "DGS2",               "2Y Treasury",         "rates",       "rate",      "%",    "none"),
+    ("ust_10y",       "DGS10",              "10Y Treasury",        "rates",       "rate",      "%",    "none"),
+    ("ust_30y",       "DGS30",              "30Y Treasury",        "rates",       "rate",      "%",    "none"),
+    ("curve_2s10s",   "T10Y2Y",             "2s10s Curve",         "rates",       "spread",    "%",    "up"),
+    ("real_10y",      "DFII10",             "10Y Real (TIPS)",     "rates",       "rate",      "%",    "down"),
+
+    ("cpi",           "CPIAUCSL",           "CPI",                 "inflation",   "index_yoy", "% y/y","down"),
+    ("core_cpi",      "CPILFESL",           "Core CPI",            "inflation",   "index_yoy", "% y/y","down"),
+    ("pce",           "PCEPI",              "PCE",                 "inflation",   "index_yoy", "% y/y","down"),
+    ("core_pce",      "PCEPILFE",           "Core PCE",            "inflation",   "index_yoy", "% y/y","down"),
+    ("ppi",           "PPIFIS",             "PPI (Final Demand)",  "inflation",   "index_yoy", "% y/y","down"),
+    ("breakeven_10y", "T10YIE",             "10Y Breakeven",       "inflation",   "rate",      "%",    "down"),
+
+    ("ig_oas",        "BAMLC0A0CM",         "IG OAS",              "credit",      "spread",    "%",    "down"),
+    ("hy_oas",        "BAMLH0A0HYM2",       "HY OAS",              "credit",      "spread",    "%",    "down"),
+
+    ("sp500",         "SP500",              "S&P 500",             "equities",    "price",     "",     "up"),
+    ("nasdaq",        "NASDAQCOM",          "Nasdaq Composite",    "equities",    "price",     "",     "up"),
+    ("vix",           "VIXCLS",             "VIX",                 "equities",    "level",     "",     "down"),
+
+    ("new_home_sales","HSN1F",              "New Home Sales",      "housing",     "level",     "k",    "up"),
+    ("housing_starts","HOUST",              "Housing Starts",      "housing",     "level",     "k",    "up"),
+    ("mortgage_30y",  "MORTGAGE30US",       "30Y Mortgage Rate",   "housing",     "rate",      "%",    "down"),
+    ("case_shiller",  "CSUSHPINSA",         "Case-Shiller HPI",    "housing",     "index_yoy", "% y/y","up"),
+
+    ("unemployment",  "UNRATE",             "Unemployment Rate",   "labor",       "rate",      "%",    "down"),
+    ("payrolls",      "PAYEMS",             "Nonfarm Payrolls",    "labor",       "level_chg", "k",    "up"),
+    ("claims",        "ICSA",               "Initial Jobless Claims","labor",     "level",     "",     "down"),
+
+    ("wti",           "DCOILWTICO",         "WTI Crude",           "commodities", "price",     "$",    "none"),
+    ("brent",         "DCOILBRENTEU",       "Brent Crude",         "commodities", "price",     "$",    "none"),
+    ("gold",          "GOLDPMGBD228NLBM",   "Gold (London PM)",    "commodities", "price",     "$",    "none"),
+    ("dollar",        "DTWEXBGS",           "Broad Dollar Index",  "commodities", "price",     "",     "none"),
+]
+
+# Tenors (FRED ids) used to draw the Treasury yield curve.
+CURVE = [
+    ("1M", "DGS1MO"), ("3M", "DGS3MO"), ("6M", "DGS6MO"), ("1Y", "DGS1"),
+    ("2Y", "DGS2"), ("3Y", "DGS3"), ("5Y", "DGS5"), ("7Y", "DGS7"),
+    ("10Y", "DGS10"), ("20Y", "DGS20"), ("30Y", "DGS30"),
+]
+
 
 def ensure_dirs() -> None:
-    for d in (DATA_DIR, RAW_DIR, ANALYSES_DIR):
-        d.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
