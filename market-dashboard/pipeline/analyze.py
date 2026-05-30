@@ -107,6 +107,11 @@ def signal_for(m: dict) -> dict | None:
             return _sig(-0.3, "Correction", f"{m['label']} {pfh:.1f}% off its 1y high — in correction.")
         return _sig(-0.6, "Bear", f"{m['label']} {pfh:.1f}% off its 1y high — bear-market territory.")
 
+    if key in ("real_gdp", "final_sales"):
+        label = "Real GDP" if key == "real_gdp" else "Final sales"
+        score = 0.15 if v >= 2 else (-0.25 if v < 1 else 0.0)
+        return _sig(score, label, f"{label} {v:+.1f}% annualized.")
+
     if key == "unemployment":
         d = _chg(m, "1y")
         if d is not None and d >= 0.5:
@@ -208,6 +213,7 @@ _SECTION_LEADS = {
     "equities": ["sp500", "vix"],
     "housing": ["mortgage_30y", "new_home_sales", "case_shiller"],
     "labor": ["payrolls", "unemployment", "claims"],
+    "growth": ["real_gdp", "final_sales"],
     "commodities": ["wti", "gold", "dollar"],
 }
 
@@ -218,4 +224,13 @@ def section_summary(section_key: str, metrics_by_key: dict) -> str:
         m = metrics_by_key.get(key)
         if m and m.get("signal"):
             notes.append(m["signal"]["note"])
+    if section_key == "growth":
+        gdp = (metrics_by_key.get("real_gdp") or {}).get("headline")
+        fs = (metrics_by_key.get("final_sales") or {}).get("headline")
+        if gdp is not None and fs is not None:
+            gap = gdp - fs
+            if gap >= 1.0:
+                notes.append(f"Headline GDP is running {gap:.1f}pp above final sales — low-quality growth (inventories/government/trade).")
+            elif gap <= -0.5:
+                notes.append("Final sales are outpacing headline GDP — underlying demand is solid.")
     return " ".join(notes)

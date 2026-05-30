@@ -95,6 +95,14 @@ VARIABLE = {
         "what": "S&P CoreLogic Case-Shiller national home price index, year-over-year — the benchmark for U.S. home-price trends.",
         "read": "Negative y/y means home prices are actually falling — a drag on household wealth and confidence.",
     },
+    "real_gdp": {
+        "what": "Real GDP growth (annualized) — the headline pace of the economy.",
+        "read": "Headline GDP can be flattered by inventory builds, government spending, or a shrinking trade deficit — compare it to final sales below to judge the *quality* of the growth.",
+    },
+    "final_sales": {
+        "what": "Real final sales to private domestic purchasers — GDP stripped of inventories, trade, and government. The cleanest gauge of underlying private demand.",
+        "read": "When this runs well below headline GDP, the growth is 'low quality' (propped up by inventories/government). When it tracks or leads GDP, demand is genuinely solid.",
+    },
     "unemployment": {
         "what": "Headline unemployment rate — the Fed's other mandate (alongside inflation) and a core recession signal.",
         "read": "A rise of ~0.5pp off the lows (the 'Sahm rule') has historically marked recession onset; low and steady = healthy labor market.",
@@ -132,5 +140,6 @@ SECTION = {
     "equities": "The risk-asset barometer: index momentum, volatility (VIX), and valuation (CAPE). Reflects the market's overall appetite for risk.",
     "housing": "Housing is the most rate-sensitive part of the economy and an early indicator of how Fed policy is feeding through to growth.",
     "labor": "The Fed's second mandate. A softening labor market (rising unemployment/claims, weak payrolls) is the clearest recession tell.",
+    "growth": "The pace AND quality of growth. Headline GDP vs final sales to private domestic purchasers shows whether growth is genuine private demand or propped up by inventories/government.",
     "commodities": "Energy and the dollar drive inflation and global financial conditions; gold reflects real yields and risk appetite.",
 }
