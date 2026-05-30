@@ -17,6 +17,7 @@ import analyze
 import explanations
 import signals as signals_mod
 import semis as semis_mod
+import valuation as valuation_mod
 
 
 def _meta(row) -> dict:
@@ -95,6 +96,18 @@ def build(verbose: bool = False) -> dict:
     # Optional extras
     cape = sources.shiller_cape()
 
+    # Gold — FRED discontinued its series; source the spot price from FMP.
+    if config.FMP_API_KEY:
+        gold_obs = sources.fmp_history("GCUSD")
+        if gold_obs:
+            gmeta = {"key": "gold", "label": "Gold", "section": "commodities",
+                     "kind": "price", "unit": "$", "better": "none"}
+            gm = indicators.build_metric(gmeta, gold_obs)
+            ex = explanations.VARIABLE.get("gold")
+            if ex:
+                gm["explain"] = ex
+            metrics_by_key["gold"] = gm
+
     # Yield curve (best effort; tolerate missing tenors)
     curve = []
     for tenor, fid in config.CURVE:
@@ -109,7 +122,7 @@ def build(verbose: bool = False) -> dict:
         sec_metrics = [m for m in metrics_by_key.values() if m.get("section") == skey]
         # preserve catalog order
         order = [r[0] for r in config.SERIES]
-        sec_metrics.sort(key=lambda m: order.index(m["key"]))
+        sec_metrics.sort(key=lambda m: order.index(m["key"]) if m["key"] in order else 999)
         sections.append({
             "key": skey,
             "label": slabel,
@@ -143,12 +156,15 @@ def build(verbose: bool = False) -> dict:
         extras["leaders_growth"] = sum(leads) / len(leads) if leads else None
     playbook = signals_mod.build_playbook(metrics_by_key, cape, overall, extras)
 
+    valuation = valuation_mod.build_valuation(prev=(prev_snapshot or {}).get("valuation"))
+
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
         "generated_at": now,
         "overall": overall,
         "playbook": playbook,
         "semis": semis,
+        "valuation": valuation,
         "sections": sections,
         "curve": curve,
         "cape": cape,

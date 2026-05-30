@@ -122,7 +122,8 @@ SERIES = [
 
     ("wti",           "DCOILWTICO",         "WTI Crude",           "commodities", "price",     "$",    "none"),
     ("brent",         "DCOILBRENTEU",       "Brent Crude",         "commodities", "price",     "$",    "none"),
-    ("gold",          "GOLDPMGBD228NLBM",   "Gold (London PM)",    "commodities", "price",     "$",    "none"),
+    # Gold: FRED discontinued its London-fix series, so it's sourced from FMP
+    # (GCUSD) in build.py instead of here.
     ("dollar",        "DTWEXBGS",           "Broad Dollar Index",  "commodities", "price",     "",     "none"),
 ]
 

@@ -151,6 +151,36 @@ def fmp_pe(symbol: str) -> float | None:
         return None
 
 
+def fmp_ratios(symbol: str) -> dict | None:
+    d = fmp_stable("ratios-ttm", symbol=symbol)
+    return d[0] if isinstance(d, list) and d else None
+
+
+def fmp_key_metrics(symbol: str) -> dict | None:
+    d = fmp_stable("key-metrics-ttm", symbol=symbol)
+    return d[0] if isinstance(d, list) and d else None
+
+
+def fmp_estimates(symbol: str) -> list:
+    d = fmp_stable("analyst-estimates", symbol=symbol, period="annual", limit=10)
+    return d if isinstance(d, list) else []
+
+
+def fmp_history(symbol: str) -> list:
+    """Daily price history as [(date, price), ...] ascending (for sparklines)."""
+    d = fmp_stable("historical-price-eod/light", symbol=symbol)
+    rows = d if isinstance(d, list) else (d.get("historical") if isinstance(d, dict) else None)
+    if not rows:
+        return []
+    out = []
+    for r in rows:
+        dt, px = r.get("date"), (r.get("price") if r.get("price") is not None else r.get("close"))
+        if dt and isinstance(px, (int, float)):
+            out.append((dt, float(px)))
+    out.sort()
+    return out
+
+
 def fmp_income_quarterly(symbol: str, limit: int = 6) -> list:
     d = fmp_stable("income-statement", symbol=symbol, period="quarter", limit=limit)
     return d if isinstance(d, list) else []
