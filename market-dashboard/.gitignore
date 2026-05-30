@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Local env
+.env
+
+# Generated data (scraped + computed). Remove these lines if you want to commit
+# the dataset (e.g. for static hosting / sharing a snapshot).
+data/snapshot.json
+data/history.json

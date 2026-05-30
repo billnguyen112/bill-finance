@@ -1,0 +1,76 @@
+name: Market Dashboard
+
+# Scrapes the data, builds the dashboard, and publishes it to GitHub Pages.
+# Trigger it from the browser (Actions tab -> Run workflow) or let it run weekly.
+on:
+  workflow_dispatch:        # manual "Run workflow" button in the Actions tab
+  schedule:
+    - cron: "0 12 * * 1"    # every Monday 12:00 UTC
+  push:
+    branches: [main]
+    paths:
+      - "market-dashboard/**"
+      - ".github/workflows/market-dashboard.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: market-dashboard-pages
+  cancel-in-progress: true
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: market-dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pipeline deps
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Carry over score history from the live site (if any)
+        run: |
+          mkdir -p data
+          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/history.json"
+          curl -fsSL "$URL" -o data/history.json || echo "no published history yet — starting fresh"
+
+      - name: Scrape data + compute snapshot
+        run: python pipeline/run.py refresh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: market-dashboard/frontend/package-lock.json
+
+      - name: Build dashboard
+        working-directory: market-dashboard/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Bundle data into the static site
+        run: |
+          cp data/snapshot.json frontend/dist/snapshot.json
+          cp data/history.json  frontend/dist/history.json
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: market-dashboard/frontend/dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
