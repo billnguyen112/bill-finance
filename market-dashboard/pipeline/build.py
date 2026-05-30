@@ -14,6 +14,7 @@ import sources
 import indicators
 import analyze
 import explanations
+import signals as signals_mod
 
 
 def _meta(row) -> dict:
@@ -93,10 +94,13 @@ def build(verbose: bool = False) -> dict:
             "metrics": sec_metrics,
         })
 
+    playbook = signals_mod.build_playbook(metrics_by_key, cape, overall)
+
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
         "generated_at": now,
         "overall": overall,
+        "playbook": playbook,
         "sections": sections,
         "curve": curve,
         "cape": cape,
