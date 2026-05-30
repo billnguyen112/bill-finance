@@ -6,6 +6,7 @@ over time, for the trend chart).
 from __future__ import annotations
 
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
@@ -47,6 +48,17 @@ def build(verbose: bool = False) -> dict:
     with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
         for fid, obs, err in ex.map(_fetch, all_ids):
             fetched[fid] = (obs, err)
+
+    # Gentle sequential retry for stragglers — a burst of parallel requests can
+    # get a few rate-limited/dropped even on the API; spacing them out recovers them.
+    stragglers = [fid for fid, (obs, err) in fetched.items() if err]
+    for fid in stragglers:
+        time.sleep(0.4)
+        _, obs, err = _fetch(fid)
+        fetched[fid] = (obs, err)
+    if verbose and stragglers:
+        recovered = sum(1 for fid in stragglers if not fetched[fid][1])
+        print(f"  retried {len(stragglers)} stragglers, recovered {recovered}")
 
     for row in config.SERIES:
         meta = _meta(row)

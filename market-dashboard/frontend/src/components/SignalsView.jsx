@@ -30,7 +30,7 @@ function SignalRow({ s }) {
 
 export default function SignalsView({ playbook }) {
   if (!playbook) return <p className="muted">No signal data yet — refresh the data.</p>;
-  const { posture, buy_signals, sell_signals, buy_met, buy_total, sell_met, sell_total, pending } = playbook;
+  const { posture, buy_signals, sell_signals, buy_met, buy_total, sell_met, sell_total, pending, fmp_enabled } = playbook;
 
   return (
     <>
@@ -47,8 +47,13 @@ export default function SignalsView({ playbook }) {
 
       {pending > 0 && (
         <div className="banner info">
-          {pending} signal{pending > 1 ? "s" : ""} awaiting a data source. Add an <code>FMP_API_KEY</code> repo
-          secret (free Financial Modeling Prep key) to compute the sector & earnings signals.
+          {fmp_enabled ? (
+            <>{pending} signal{pending > 1 ? "s" : ""} couldn't be computed — FMP returned no data
+            (its free tier may not cover these endpoints). Being switched to free-tier endpoints.</>
+          ) : (
+            <>{pending} signal{pending > 1 ? "s" : ""} awaiting a data source. Add an <code>FMP_API_KEY</code> repo
+            secret (free Financial Modeling Prep key) to compute the sector & earnings signals.</>
+          )}
         </div>
       )}
 

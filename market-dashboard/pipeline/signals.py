@@ -176,4 +176,5 @@ def build_playbook(metrics_by_key: dict, cape, overall: dict, extras: dict | Non
         "buy_met": buy_met, "buy_total": len(buys),
         "sell_met": sell_met, "sell_total": len(sells),
         "pending": pending,
+        "fmp_enabled": bool(config.FMP_API_KEY),
     }
