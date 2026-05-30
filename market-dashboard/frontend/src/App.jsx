@@ -4,6 +4,7 @@ import { scoreColor, fmtDateTime, num } from "./format.js";
 import MetricTile from "./components/MetricTile.jsx";
 import CurveChart from "./components/CurveChart.jsx";
 import ScoreHistory from "./components/ScoreHistory.jsx";
+import SignalsView from "./components/SignalsView.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -44,6 +45,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
   const [backend, setBackend] = useState(null); // null=unknown, true/false once probed
+  const [view, setView] = useState("dashboard"); // "dashboard" | "signals"
 
   useEffect(() => { probeBackend().then(setBackend); }, []);
 
@@ -109,6 +111,16 @@ export default function App() {
         </div>
       )}
 
+      {snap && (
+        <nav className="tabs">
+          <button className={"tab" + (view === "dashboard" ? " active" : "")}
+                  onClick={() => setView("dashboard")}>Dashboard</button>
+          <button className={"tab" + (view === "signals" ? " active" : "")}
+                  onClick={() => setView("signals")}>Signals</button>
+        </nav>
+      )}
+
+      {view === "dashboard" && (<>
       {overall && (
         <section className="hero card">
           <div className="hero-main">
@@ -157,6 +169,9 @@ export default function App() {
       )}
 
       {snap?.sections?.map((sec) => <SectionCard key={sec.key} sec={sec} />)}
+      </>)}
+
+      {view === "signals" && <SignalsView playbook={snap?.playbook} />}
 
       <footer className="foot muted">
         Data: FRED (fredgraph.csv, no key) + multpl.com (CAPE). Signals are rule-based, not financial advice.
