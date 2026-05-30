@@ -16,6 +16,7 @@ import indicators
 import analyze
 import explanations
 import signals as signals_mod
+import semis as semis_mod
 
 
 def _meta(row) -> dict:
@@ -109,24 +110,26 @@ def build(verbose: bool = False) -> dict:
             "metrics": sec_metrics,
         })
 
+    # Semiconductor monitor — also feeds the semi signals (no duplicate calls).
+    semis = semis_mod.build_semis()
+
     # Extra data for the buy/sell signal model.
     extras = {"margin": sources.finra_margin_debt()}
+    if semis:
+        extras["semis_pe"] = [c["pe"] for c in semis["companies"] if c.get("pe")]
+        extras["semis_rev"] = [c["rev_yoy"] for c in semis["companies"] if c.get("rev_yoy") is not None]
     if config.FMP_API_KEY:
         sectors = sources.fmp_sectors()
         extras["sectors"] = sectors
-        lead_tickers = [config.SECTOR_BELLWETHERS.get(s["sector"])
-                        for s in sorted(sectors or [], key=lambda x: x["change"], reverse=True)[:2]
-                        if s["change"] > 0]
-        lead_tickers = [t for t in lead_tickers if t]
-        # Fetch the basket concurrently (each call is ~sub-second when it works).
-        with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
-            pes = list(ex.map(sources.fmp_pe_ttm, config.SEMIS_BASKET))
-            revs = list(ex.map(sources.fmp_revenue_growth_yoy, config.SEMIS_BASKET))
-            leads = list(ex.map(sources.fmp_revenue_growth_yoy, lead_tickers)) if lead_tickers else []
-        extras["semis_pe"] = [v for v in pes if v is not None]
-        extras["semis_rev"] = [v for v in revs if v is not None]
-        lg = [v for v in leads if v is not None]
-        extras["leaders_growth"] = sum(lg) / len(lg) if lg else None
+        leads = []
+        for s in sorted(sectors or [], key=lambda x: x["change"], reverse=True)[:2]:
+            if s["change"] > 0:
+                tkr = config.SECTOR_BELLWETHERS.get(s["sector"])
+                inc = sources.fmp_income_quarterly(tkr, limit=5) if tkr else []
+                rv = [r.get("revenue") for r in inc]
+                if len(rv) >= 5 and rv[0] and rv[4]:
+                    leads.append((rv[0] / rv[4] - 1) * 100)
+        extras["leaders_growth"] = sum(leads) / len(leads) if leads else None
     playbook = signals_mod.build_playbook(metrics_by_key, cape, overall, extras)
 
     now = datetime.now(timezone.utc).isoformat()
@@ -134,6 +137,7 @@ def build(verbose: bool = False) -> dict:
         "generated_at": now,
         "overall": overall,
         "playbook": playbook,
+        "semis": semis,
         "sections": sections,
         "curve": curve,
         "cape": cape,

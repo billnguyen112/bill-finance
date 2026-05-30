@@ -5,6 +5,7 @@ import MetricTile from "./components/MetricTile.jsx";
 import CurveChart from "./components/CurveChart.jsx";
 import ScoreHistory from "./components/ScoreHistory.jsx";
 import SignalsView from "./components/SignalsView.jsx";
+import SemisView from "./components/SemisView.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -134,6 +135,8 @@ export default function App() {
                   onClick={() => setView("dashboard")}>Dashboard</button>
           <button className={"tab" + (view === "signals" ? " active" : "")}
                   onClick={() => setView("signals")}>Signals</button>
+          <button className={"tab" + (view === "semis" ? " active" : "")}
+                  onClick={() => setView("semis")}>Semiconductors</button>
         </nav>
       )}
 
@@ -189,6 +192,8 @@ export default function App() {
       </>)}
 
       {view === "signals" && <SignalsView playbook={snap?.playbook} />}
+
+      {view === "semis" && <SemisView semis={snap?.semis} />}
 
       <footer className="foot muted">
         Data: FRED ({snap?.fred_mode === "api" ? "API" : "keyless CSV"}) · FINRA · FMP{" "}

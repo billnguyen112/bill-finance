@@ -33,7 +33,7 @@ FINRA_MARGIN_URL = "https://www.finra.org/investors/learn-to-invest/advanced-inv
 # Get one at https://site.financialmodelingprep.com/developer/docs (Free plan).
 # Unlocks the leading-sectors, sector/tech earnings, and tech valuation signals.
 FMP_API_KEY = (os.environ.get("FMP_API_KEY") or "").strip() or None
-FMP_BASE = "https://financialmodelingprep.com/api/v3"
+FMP_BASE = "https://financialmodelingprep.com/stable"
 # Semiconductor / big-tech basket for the valuation + earnings-plateau signals.
 SEMIS_BASKET = ["NVDA", "AVGO", "AMD", "TSM", "MU", "QCOM"]
 # One bellwether per FMP sector name, for "leaders' earnings growth".

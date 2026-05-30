@@ -215,4 +215,28 @@ body {
 .sources a { color: var(--accent); text-decoration: none; }
 .sources a:hover { text-decoration: underline; }
 
+/* Semiconductors tab */
+.semis-hero { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+.semis-score { display: flex; flex-direction: column; }
+.semis-num { font-family: var(--mono); font-size: 44px; font-weight: 700; line-height: 1; }
+.semis-num small { font-size: 18px; color: var(--muted); font-weight: 400; }
+.semis-label { font-family: var(--display); font-size: 20px; font-weight: 600; }
+.sstats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 14px; flex: 1; min-width: 260px; }
+.sstat { display: flex; flex-direction: column; gap: 2px; }
+.sstat-v { font-family: var(--mono); font-size: 18px; font-weight: 600; }
+.sstat-l { font-size: 11px; color: var(--muted); }
+
+.semis-table-wrap { overflow-x: auto; }
+.semis-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.semis-table th { text-align: right; padding: 6px 10px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.semis-table th.l, .semis-table td.l { text-align: left; }
+.semis-table td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); font-family: var(--mono); white-space: nowrap; }
+.semis-table tr:last-child td { border-bottom: none; }
+.semis-table .sym { font-weight: 700; font-family: var(--mono); }
+.semis-table .cname { display: block; font-family: system-ui, sans-serif; font-size: 11px; color: var(--muted); }
+.semis-table .mc { color: var(--muted); font-size: 11px; }
+.semis-table .pos { color: var(--green); }
+.semis-table .neg { color: var(--red); }
+.semis-table .ne { color: var(--accent-2); }
+
 .foot { margin-top: 26px; text-align: center; font-size: 12px; }
