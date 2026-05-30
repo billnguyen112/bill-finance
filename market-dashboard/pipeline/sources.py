@@ -21,17 +21,19 @@ FRED_API = "https://api.stlouisfed.org/fred/series/observations"
 _UA = {"User-Agent": "Mozilla/5.0 (market-dashboard)"}
 
 
-def _get(url: str) -> str:
+def _get(url: str, retries: int | None = None) -> str:
     last = None
-    for attempt in range(config.HTTP_RETRIES):
+    n = config.HTTP_RETRIES if retries is None else retries
+    for attempt in range(n):
         try:
             req = urllib.request.Request(url, headers=_UA)
             with urllib.request.urlopen(req, timeout=config.HTTP_TIMEOUT) as resp:
                 return resp.read().decode("utf-8", "replace")
         except Exception as exc:  # network flake / timeout
             last = exc
-            time.sleep(2 ** attempt)  # 1, 2, 4, 8s backoff
-    raise RuntimeError(f"GET failed after {config.HTTP_RETRIES} tries: {url} ({last})")
+            if attempt < n - 1:
+                time.sleep(2 ** attempt)  # 1, 2, 4, 8s backoff
+    raise RuntimeError(f"GET failed after {n} tries: {url} ({last})")
 
 
 def fred_series(series_id: str) -> list[tuple[str, float]]:
@@ -119,7 +121,7 @@ def fmp_get(path: str):
     sep = "&" if "?" in path else "?"
     url = f"{config.FMP_BASE}/{path}{sep}apikey={config.FMP_API_KEY}"
     try:
-        return json.loads(_get(url))
+        return json.loads(_get(url, retries=2))  # fail fast — don't burn retries
     except Exception:
         return None
 

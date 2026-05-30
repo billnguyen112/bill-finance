@@ -102,18 +102,19 @@ def build(verbose: bool = False) -> dict:
     if config.FMP_API_KEY:
         sectors = sources.fmp_sectors()
         extras["sectors"] = sectors
-        extras["semis_pe"] = [pe for t in config.SEMIS_BASKET
-                              if (pe := sources.fmp_pe_ttm(t)) is not None]
-        extras["semis_rev"] = [g for t in config.SEMIS_BASKET
-                               if (g := sources.fmp_revenue_growth_yoy(t)) is not None]
-        leaders = []
-        for s in sorted(sectors or [], key=lambda x: x["change"], reverse=True)[:2]:
-            if s["change"] > 0:
-                tkr = config.SECTOR_BELLWETHERS.get(s["sector"])
-                g = sources.fmp_revenue_growth_yoy(tkr) if tkr else None
-                if g is not None:
-                    leaders.append(g)
-        extras["leaders_growth"] = sum(leaders) / len(leaders) if leaders else None
+        lead_tickers = [config.SECTOR_BELLWETHERS.get(s["sector"])
+                        for s in sorted(sectors or [], key=lambda x: x["change"], reverse=True)[:2]
+                        if s["change"] > 0]
+        lead_tickers = [t for t in lead_tickers if t]
+        # Fetch the basket concurrently (each call is ~sub-second when it works).
+        with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
+            pes = list(ex.map(sources.fmp_pe_ttm, config.SEMIS_BASKET))
+            revs = list(ex.map(sources.fmp_revenue_growth_yoy, config.SEMIS_BASKET))
+            leads = list(ex.map(sources.fmp_revenue_growth_yoy, lead_tickers)) if lead_tickers else []
+        extras["semis_pe"] = [v for v in pes if v is not None]
+        extras["semis_rev"] = [v for v in revs if v is not None]
+        lg = [v for v in leads if v is not None]
+        extras["leaders_growth"] = sum(lg) / len(lg) if lg else None
     playbook = signals_mod.build_playbook(metrics_by_key, cape, overall, extras)
 
     now = datetime.now(timezone.utc).isoformat()
