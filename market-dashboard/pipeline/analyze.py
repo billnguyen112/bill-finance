@@ -107,6 +107,43 @@ def signal_for(m: dict) -> dict | None:
             return _sig(-0.3, "Correction", f"{m['label']} {pfh:.1f}% off its 1y high — in correction.")
         return _sig(-0.6, "Bear", f"{m['label']} {pfh:.1f}% off its 1y high — bear-market territory.")
 
+    if key == "net_liquidity":
+        c = m.get("changes", {}).get("1m") or m.get("changes", {}).get("prev")
+        pct = c["pct"] if c else None
+        t = v / 1e6
+        if pct is not None and pct > 0.5:
+            return _sig(0.2, "Expanding", f"Net liquidity ${t:.2f}T — expanding (tailwind).")
+        if pct is not None and pct < -0.5:
+            return _sig(-0.3, "Draining", f"Net liquidity ${t:.2f}T — draining (headwind for risk).")
+        return _sig(0.0, "Flat", f"Net liquidity ${t:.2f}T.")
+
+    if key == "cfnai":
+        if v < -0.7:
+            return _sig(-0.5, "Recessionary", f"CFNAI {v:+.2f} — well below trend.")
+        if v > 0:
+            return _sig(0.15, "Above trend", f"CFNAI {v:+.2f} — above-trend growth.")
+        return _sig(-0.1, "Below trend", f"CFNAI {v:+.2f} — slightly below trend.")
+
+    if key == "empire_mfg":
+        if v < -10:
+            return _sig(-0.3, "Contracting", f"Empire State {v:+.1f} — factory contraction.")
+        if v > 0:
+            return _sig(0.1, "Expanding", f"Empire State {v:+.1f} — expansion.")
+        return _sig(0.0, "Flat", f"Empire State {v:+.1f}.")
+
+    if key in ("small_caps", "regional_banks"):
+        pfh = m.get("stats", {}).get("pct_from_high_1y")
+        if pfh is None:
+            return None
+        label = "Small caps" if key == "small_caps" else "Regional banks"
+        if pfh >= -3:
+            return _sig(0.3, "Strong", f"{label} within {abs(pfh):.0f}% of 1y high — healthy risk appetite/breadth.")
+        if pfh >= -12:
+            return _sig(0.0, "OK", f"{label} {pfh:.0f}% off the 1y high.")
+        if pfh >= -20:
+            return _sig(-0.3, "Lagging", f"{label} {pfh:.0f}% off the 1y high — narrow/fragile.")
+        return _sig(-0.5, "Stressed", f"{label} {pfh:.0f}% off the 1y high — stress.")
+
     if key in ("real_gdp", "final_sales"):
         label = "Real GDP" if key == "real_gdp" else "Final sales"
         score = 0.15 if v >= 2 else (-0.25 if v < 1 else 0.0)
@@ -164,9 +201,12 @@ _REGIME_WEIGHTS = {
     "core_pce": 1.0,
     "core_cpi": 0.6,
     "sp500": 1.2,
+    "small_caps": 0.7,
+    "net_liquidity": 0.9,
     "unemployment": 1.0,
     "payrolls": 0.9,
     "claims": 0.5,
+    "cfnai": 0.6,
 }
 
 
@@ -210,10 +250,11 @@ _SECTION_LEADS = {
     "rates": ["fed_funds", "ust_10y", "curve_2s10s", "real_10y"],
     "inflation": ["core_pce", "core_cpi", "cpi"],
     "credit": ["hy_oas", "ig_oas"],
-    "equities": ["sp500", "vix"],
+    "liquidity": ["net_liquidity", "tga", "reverse_repo"],
+    "equities": ["sp500", "small_caps", "regional_banks", "vix"],
     "housing": ["mortgage_30y", "new_home_sales", "case_shiller"],
     "labor": ["payrolls", "unemployment", "claims"],
-    "growth": ["real_gdp", "final_sales"],
+    "growth": ["real_gdp", "final_sales", "cfnai"],
     "commodities": ["wti", "gold", "dollar"],
 }
 

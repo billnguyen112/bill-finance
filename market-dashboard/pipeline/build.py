@@ -114,6 +114,49 @@ def build(verbose: bool = False) -> dict:
             gm["source_url"] = "https://www.tradingview.com/symbols/TVC-GOLD/"
             metrics_by_key["gold"] = gm
 
+    def _attach(m, key, source):
+        m["source_url"] = source
+        e = explanations.VARIABLE.get(key)
+        if e:
+            m["explain"] = e
+        s = analyze.signal_for(m)
+        if s:
+            m["signal"] = s
+        metrics_by_key[key] = m
+
+    # Net liquidity = Fed balance sheet − TGA − reverse repo (RRP $bn → $mn),
+    # aligned to the weekly Fed-balance-sheet dates.
+    walcl = fetched.get("WALCL", ([], None))[0]
+    tga = fetched.get("WTREGEN", ([], None))[0]
+    rrp = fetched.get("RRPONTSYD", ([], None))[0]
+    if walcl and tga and rrp:
+        def _asof(obs, d):
+            v = None
+            for dd, val in obs:
+                if dd <= d:
+                    v = val
+                else:
+                    break
+            return v
+        net = [(d, wv - t - r * 1000) for d, wv in walcl[-300:]
+               if (t := _asof(tga, d)) is not None and (r := _asof(rrp, d)) is not None]
+        if net:
+            nm = indicators.build_metric(
+                {"key": "net_liquidity", "label": "Net Liquidity", "section": "liquidity",
+                 "kind": "price", "unit": "$M", "better": "up"}, net)
+            _attach(nm, "net_liquidity", "https://fred.stlouisfed.org/series/WALCL")
+
+    # Small caps (IWM) + regional banks (KRE) via FMP — both signals he watches.
+    if config.FMP_API_KEY:
+        for sym, key, label, better in [("IWM", "small_caps", "Russell 2000 (small caps)", "up"),
+                                        ("KRE", "regional_banks", "Regional Banks (KRE)", "up")]:
+            obs = sources.fmp_history(sym)
+            if obs:
+                m = indicators.build_metric(
+                    {"key": key, "label": label, "section": "equities",
+                     "kind": "price", "unit": "$", "better": better}, obs)
+                _attach(m, key, f"https://stockanalysis.com/etf/{sym.lower()}/")
+
     # Yield curve (best effort; tolerate missing tenors)
     curve = []
     for tenor, fid in config.CURVE:

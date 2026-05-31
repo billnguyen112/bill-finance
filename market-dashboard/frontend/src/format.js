@@ -15,6 +15,8 @@ export function fmtHeadline(m) {
   if (v === null || v === undefined) return "—";
   const u = m.headline_unit ?? m.unit ?? "";
   if (u === "% y/y" || u === "%") return `${v > 0 && u === "%" ? "" : ""}${num(v, 2)}%`;
+  if (u === "$M") { const t = v / 1e6; return t >= 1 ? `$${num(t, 2)}T` : `$${num(v / 1e3, 0)}B`; }
+  if (u === "$B") return v >= 1000 ? `$${num(v / 1e3, 2)}T` : `$${num(v, 0)}B`;
   if (u === "$") return `$${num(v, 2)}`;
   if (u === "k") return `${v > 0 ? "+" : ""}${num(v, 0)}k`;
   if (m.kind === "price" || m.kind === "level") return num(v, v >= 1000 ? 0 : 2);

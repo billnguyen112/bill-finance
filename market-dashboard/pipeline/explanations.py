@@ -95,6 +95,42 @@ VARIABLE = {
         "what": "S&P CoreLogic Case-Shiller national home price index, year-over-year — the benchmark for U.S. home-price trends.",
         "read": "Negative y/y means home prices are actually falling — a drag on household wealth and confidence.",
     },
+    "net_liquidity": {
+        "what": "Net liquidity = Fed balance sheet − Treasury General Account (TGA) − overnight reverse repo. The pool of cash sloshing around markets — a powerful driver of risk-asset prices.",
+        "read": "Rising net liquidity is a tailwind for stocks; draining liquidity (Fed shrinking, TGA refilling, RRP rising) is a headwind.",
+    },
+    "fed_assets": {
+        "what": "Total assets on the Fed's balance sheet. Rising = QE (adding liquidity); falling = QT (draining it).",
+        "read": "The slow-moving backdrop for liquidity; QT is a persistent drag.",
+    },
+    "tga": {
+        "what": "Treasury General Account — the government's checking account at the Fed. When it rises (tax collection, debt issuance), it drains cash from the banking system; when it falls (spending), it injects cash.",
+        "read": "A rising TGA pulls liquidity OUT of markets (bearish); a falling TGA pushes it in. Meldrum watches this weekly.",
+    },
+    "reverse_repo": {
+        "what": "Overnight reverse repo (RRP) — cash parked at the Fed by money funds. It's drained sharply since 2023.",
+        "read": "Falling RRP releases cash into markets; once near zero, that liquidity cushion is gone.",
+    },
+    "bank_reserves": {
+        "what": "Reserve balances banks hold at the Fed — the core measure of banking-system liquidity.",
+        "read": "Falling reserves toward 'scarce' levels (~$3T) is where funding stress historically appears.",
+    },
+    "cfnai": {
+        "what": "Chicago Fed National Activity Index — a 85-indicator composite of US growth. Zero = trend growth.",
+        "read": "Above 0 = above-trend growth; a 3-month average below ~−0.7 has signaled recessions.",
+    },
+    "empire_mfg": {
+        "what": "Empire State (NY Fed) manufacturing survey — a timely, free PMI-style read on factory activity.",
+        "read": "Above 0 = expansion, below 0 = contraction. A leading growth indicator.",
+    },
+    "small_caps": {
+        "what": "Russell 2000 (IWM) — small-cap stocks. More cyclical and domestic than mega-caps; a cleaner risk-appetite and breadth gauge.",
+        "read": "Small caps leading = healthy risk-on breadth; lagging badly = narrow, fragile market (mega-cap-only).",
+    },
+    "regional_banks": {
+        "what": "Regional banks ETF (KRE) — the pressure gauge for banking-system and commercial-real-estate stress.",
+        "read": "Sharp KRE weakness is an early warning of credit/funding stress (e.g. March 2023).",
+    },
     "real_gdp": {
         "what": "Real GDP growth (annualized) — the headline pace of the economy.",
         "read": "Headline GDP can be flattered by inventory builds, government spending, or a shrinking trade deficit — compare it to final sales below to judge the *quality* of the growth.",
@@ -137,6 +173,7 @@ SECTION = {
     "rates": "Where the Fed has set policy and what the bond market expects next. The yield curve and real yields tell you how restrictive conditions are.",
     "inflation": "How far inflation is from the Fed's 2% target. Core PCE is the number that matters most for rate decisions; breakevens show what markets expect.",
     "credit": "Corporate bond spreads — the market's real-time pricing of default and recession risk. Credit usually cracks before equities do.",
+    "liquidity": "The cash sloshing through markets — Fed balance sheet minus the Treasury's account (TGA) and reverse repo. Net liquidity is a powerful driver of risk assets; a heavy focus for Meldrum.",
     "equities": "The risk-asset barometer: index momentum, volatility (VIX), and valuation (CAPE). Reflects the market's overall appetite for risk.",
     "housing": "Housing is the most rate-sensitive part of the economy and an early indicator of how Fed policy is feeding through to growth.",
     "labor": "The Fed's second mandate. A softening labor market (rising unemployment/claims, weak payrolls) is the clearest recession tell.",

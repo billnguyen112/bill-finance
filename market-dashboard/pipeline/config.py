@@ -103,6 +103,7 @@ SECTIONS = [
     ("rates", "Rates & the Fed"),
     ("inflation", "Inflation"),
     ("credit", "Credit Spreads"),
+    ("liquidity", "Liquidity (Fed / TGA / RRP)"),
     ("equities", "Equities & Volatility"),
     ("housing", "Housing"),
     ("labor", "Labor & Growth"),
@@ -129,6 +130,11 @@ SERIES = [
     ("ig_oas",        "BAMLC0A0CM",         "IG OAS",              "credit",      "spread",    "%",    "down"),
     ("hy_oas",        "BAMLH0A0HYM2",       "HY OAS",              "credit",      "spread",    "%",    "down"),
 
+    ("fed_assets",    "WALCL",              "Fed Balance Sheet",   "liquidity",   "price",     "$M",   "up"),
+    ("tga",           "WTREGEN",            "Treasury Gen. Account","liquidity",  "price",     "$M",   "down"),
+    ("reverse_repo",  "RRPONTSYD",          "Overnight Reverse Repo","liquidity", "price",     "$B",   "down"),
+    ("bank_reserves", "WRESBAL",            "Bank Reserves",       "liquidity",   "price",     "$M",   "up"),
+
     ("sp500",         "SP500",              "S&P 500",             "equities",    "price",     "",     "up"),
     ("nasdaq",        "NASDAQCOM",          "Nasdaq Composite",    "equities",    "price",     "",     "up"),
     ("vix",           "VIXCLS",             "VIX",                 "equities",    "level",     "",     "down"),
@@ -144,6 +150,8 @@ SERIES = [
 
     ("real_gdp",      "A191RL1Q225SBEA",    "Real GDP growth",     "growth",      "rate",      "%",    "up"),
     ("final_sales",   "A653RL1Q225SBEA",    "Real Final Sales (priv. dom.)", "growth", "rate",  "%",    "up"),
+    ("cfnai",         "CFNAI",              "Chicago Fed Activity","growth",      "level",     "",     "up"),
+    ("empire_mfg",    "GACDISA066MSFRBNY",  "Empire State Mfg",    "growth",      "level",     "",     "up"),
 
     ("wti",           "DCOILWTICO",         "WTI Crude",           "commodities", "price",     "$",    "none"),
     ("brent",         "DCOILBRENTEU",       "Brent Crude",         "commodities", "price",     "$",    "none"),
