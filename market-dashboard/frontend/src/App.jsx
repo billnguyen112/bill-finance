@@ -9,7 +9,6 @@ import SemisView from "./components/SemisView.jsx";
 import ValuationView from "./components/ValuationView.jsx";
 import SourcesView from "./components/SourcesView.jsx";
 import FedView from "./components/FedView.jsx";
-import BubbleCard from "./components/BubbleCard.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -190,8 +189,6 @@ export default function App() {
           </div>
         </section>
       )}
-
-      <BubbleCard bubble={snap?.bubble} />
 
       {snap?.curve?.length > 0 && (
         <section className="card curve-card">

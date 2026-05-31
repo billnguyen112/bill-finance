@@ -19,7 +19,6 @@ import signals as signals_mod
 import semis as semis_mod
 import valuation as valuation_mod
 import fed as fed_mod
-import bubble as bubble_mod
 
 
 def _meta(row) -> dict:
@@ -180,16 +179,6 @@ def build(verbose: bool = False) -> dict:
 
     valuation = valuation_mod.build_valuation()
 
-    # Bubble & concentration gauge (CAPE context + Mag-7 share of GDP).
-    bubble = None
-    if config.FMP_API_KEY:
-        try:
-            gdp_obs = sources.fred_series("GDP")  # nominal GDP, $bn
-            nominal_gdp = gdp_obs[-1][1] if gdp_obs else None
-        except Exception:
-            nominal_gdp = None
-        bubble = bubble_mod.build(cape, nominal_gdp)
-
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
     fred_series = [
@@ -237,7 +226,6 @@ def build(verbose: bool = False) -> dict:
         "overall": overall,
         "playbook": playbook,
         "fed": fed_read,
-        "bubble": bubble,
         "sources": sources_block,
         "semis": semis,
         "valuation": valuation,
