@@ -523,6 +523,7 @@ def build(verbose: bool = False) -> dict:
         "errors": errors,
         "fred_mode": "api" if config.FRED_API_KEY else "csv",
         "fmp_enabled": bool(config.FMP_API_KEY),
+        "anthropic_enabled": bool(config.ANTHROPIC_API_KEY),
     }
     config.SNAPSHOT_PATH.write_text(json.dumps(snapshot, indent=2))
     _append_history(now, overall, cape)
