@@ -244,6 +244,26 @@ body {
 .views-ourread b { color: var(--green); }
 .views-tickers { font-size: 12px; color: var(--muted); margin-top: 12px; font-family: var(--mono); }
 .views-tickers b { color: var(--accent); font-family: system-ui, sans-serif; }
+
+/* Archive tab */
+.arc-entry { border-top: 1px solid var(--line); padding: 12px 0; }
+.arc-entry:first-child { border-top: none; }
+.arc-head { display: flex; align-items: baseline; gap: 12px; width: 100%; background: none; border: none; cursor: pointer; text-align: left; padding: 0; color: var(--text); }
+.arc-date { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 86px; }
+.arc-chan { font-size: 11px; font-weight: 700; color: var(--accent-2); min-width: 110px; }
+.arc-title { font-size: 14px; font-weight: 600; flex: 1; }
+.arc-caret { color: var(--muted); }
+.arc-themes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 98px; }
+.arc-themes .chip b { color: var(--accent); font-family: var(--mono); }
+.arc-body { margin: 10px 0 0 98px; }
+.arc-points { margin: 0; padding-left: 18px; }
+.arc-points li { font-size: 13px; margin-bottom: 6px; color: #c7cdd8; }
+.arc-pt-theme { color: var(--accent-2); font-weight: 600; }
+.arc-tickers { font-size: 12px; color: var(--muted); margin-top: 8px; font-family: var(--mono); }
+.arc-tickers b { color: var(--accent); font-family: system-ui, sans-serif; }
+.arc-watch { display: inline-block; margin-top: 8px; color: var(--accent); text-decoration: none; font-size: 12.5px; }
+.arc-watch:hover { text-decoration: underline; }
+@media (max-width: 640px) { .arc-themes, .arc-body { margin-left: 0; } .arc-chan { min-width: 0; } }
 .srow-now a { color: var(--accent); text-decoration: none; }
 .srow.on .srow-name { color: var(--text); }
 

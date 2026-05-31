@@ -86,15 +86,52 @@ def _channel_item(ch: dict) -> dict | None:
     }
 
 
-def build_views() -> dict | None:
+def _digest_video(ch: dict, v: dict) -> dict | None:
+    text = sources.supadata_transcript(v["video_id"])
+    if not text:
+        return None
+    if ch.get("trim_spotlight"):
+        text = _trim_spotlight(text)
+    return {
+        "video_id": v["video_id"], "channel": ch["name"], "title": v["title"],
+        "url": f"https://www.youtube.com/watch?v={v['video_id']}", "date": v["published"],
+        "word_count": len(text.split()), **_digest(text),
+    }
+
+
+def build_archive(prev_by_id: dict | None = None, days: int = 95) -> dict | None:
+    """Digest every market update from the tracked channels over the last `days`,
+    re-using already-digested videos (transcripts are immutable, and the Supadata
+    free tier is limited) so each video is fetched at most once."""
     if not config.SUPADATA_API_KEY:
         return None
-    items = []
+    from datetime import date, timedelta
+    prev_by_id = prev_by_id or {}
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    videos = []
     for ch in config.CHANNELS:
-        try:
-            it = _channel_item(ch)
-        except Exception:
-            it = None
-        if it:
-            items.append(it)
-    return {"items": items} if items else None
+        for v in sources.channel_videos(ch["channel_id"], limit=30):
+            if not v["published"] or v["published"] < cutoff or not _is_update(v["title"]):
+                continue
+            if v["video_id"] in prev_by_id:
+                videos.append(prev_by_id[v["video_id"]])
+                continue
+            try:
+                d = _digest_video(ch, v)
+            except Exception:
+                d = None
+            if d:
+                videos.append(d)
+    videos.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return {"videos": videos} if videos else None
+
+
+def latest_per_channel(archive: dict | None) -> dict | None:
+    if not archive or not archive.get("videos"):
+        return None
+    seen, items = set(), []
+    for v in archive["videos"]:
+        if v["channel"] not in seen:
+            seen.add(v["channel"])
+            items.append(v)
+    return {"items": items}

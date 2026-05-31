@@ -45,6 +45,11 @@ def history():
     return jsonify(_read_json(config.HISTORY_PATH, {"points": []}))
 
 
+@app.get("/api/archive")
+def archive():
+    return jsonify(_read_json(config.DATA_DIR / "archive.json", {"videos": []}))
+
+
 @app.post("/api/refresh")
 def refresh():
     if not _refresh_lock.acquire(blocking=False):

@@ -41,11 +41,12 @@ jobs:
       - name: Install pipeline deps
         run: pip install -r pipeline/requirements.txt
 
-      - name: Carry over score history from the live site (if any)
+      - name: Carry over score history + transcript archive from the live site
         run: |
           mkdir -p data
-          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/history.json"
-          curl -fsSL "$URL" -o data/history.json || echo "no published history yet"
+          BASE="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          curl -fsSL "$BASE/history.json" -o data/history.json || echo "no published history yet"
+          curl -fsSL "$BASE/archive.json" -o data/prev_archive.json || echo "no published archive yet"
 
       - name: Scrape data + compute snapshot
         env:
@@ -70,6 +71,7 @@ jobs:
         run: |
           cp data/snapshot.json frontend/dist/snapshot.json
           cp data/history.json  frontend/dist/history.json
+          cp data/archive.json  frontend/dist/archive.json || echo "no archive this run"
 
       - uses: actions/configure-pages@v5
 
