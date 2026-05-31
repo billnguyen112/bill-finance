@@ -147,6 +147,18 @@ body {
 }
 .airead-text { color: var(--text); font-size: 13.5px; line-height: 1.55; }
 :root[data-theme="light"] .airead { background: #faf3e3; }
+/* Rule-based fallback variant (muted, so the AI version stands out) */
+.airead-rule { background: var(--card-2); border-color: var(--line); border-left-color: var(--muted); }
+.airead-rule .airead-tag { background: var(--muted); color: #fff; }
+
+/* AI-credit: OAS sparkline + deals list */
+.oas-spark { vertical-align: middle; }
+.deals { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.deals-h { font-size: 12px; font-weight: 700; color: var(--accent-2); margin-bottom: 7px; }
+.deal { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+.deal-name { font-weight: 600; color: var(--text); min-width: 230px; }
+.deal-spread { font-family: var(--mono); color: var(--accent); font-weight: 700; }
+.deal-detail { font-size: 11.5px; }
 
 /* Fed charts grid */
 .fed-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 12px; }

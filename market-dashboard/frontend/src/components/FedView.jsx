@@ -1,5 +1,6 @@
 import React from "react";
 import { num } from "../format.js";
+import AiRead from "./AiRead.jsx";
 
 function RateChart({ c }) {
   const data = c.spark || [];
@@ -44,13 +45,13 @@ function fmtVal(it) {
   return `${sign}${num(it.value, 2)}${suffix}`;
 }
 
-export default function FedView({ fed }) {
+export default function FedView({ fed, aiSource = "llm" }) {
   if (!fed) return <p className="muted">No Fed data yet — refresh.</p>;
   const s = STANCE[fed.stance] || STANCE.hold;
-  const odds = fed.hike_odds || fed.cut_odds;
 
   return (
     <>
+      <AiRead text={fed.analysis} source={aiSource} />
       <section className="card">
         <span className="hero-eyebrow">Fed watch — market-implied policy path (is a pivot coming?)</span>
         <div className="fed-head">

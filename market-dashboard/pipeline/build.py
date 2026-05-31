@@ -179,7 +179,7 @@ def _metric_brief(m: dict) -> dict:
 
 
 def _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes,
-                   semis=None, valuation=None, ai_credit=None) -> dict:
+                   semis=None, valuation=None, ai_credit=None, fed=None) -> dict:
     """Compact view of the whole dashboard for the analysis call."""
     secs = {}
     for sec in sections:
@@ -194,12 +194,13 @@ def _macro_payload(sections, gauges, curve, watchlist, overall, playbook, change
             {"sym": e.get("symbol"), "role": e.get("role"), "wk": e.get("w1"),
              "mo": e.get("m1"), "yr": e.get("y1"), "from_high": e.get("pct_from_high")}
             for e in watchlist["items"]]}
-    if ai_credit and ai_credit.get("names"):
-        secs["ai_credit"] = {"label": "AI buildout credit-risk proxy (CoreWeave/neoclouds + hyperscalers)",
-                             "canary_avg_from_high": ai_credit.get("canary_avg_from_high"),
-                             "names": [{"sym": n["symbol"], "canary": n["canary"],
-                                        "from_high": n["pct_from_high"], "wk": n["w1"], "mo": n["m1"]}
-                                       for n in ai_credit["names"]]}
+    if ai_credit and ai_credit.get("tiers"):
+        secs["ai_credit"] = {"label": "AI buildout credit risk — rating-tiered OAS (real credit spreads, CDS proxy)",
+                             "hy_minus_ig": ai_credit.get("hy_minus_ig"),
+                             "signal": ai_credit.get("signal", {}).get("label"),
+                             "tiers": [{"label": t["label"], "oas_pct": t["value"], "wk": t["w1"],
+                                        "junk": t["is_junk"], "note": t["note"]}
+                                       for t in ai_credit["tiers"]]}
     if semis:
         secs["semis"] = {"label": "Semiconductors", "strength": semis.get("strength"),
                          "strength_label": semis.get("strength_label"),
@@ -213,15 +214,26 @@ def _macro_payload(sections, gauges, curve, watchlist, overall, playbook, change
                              "overall_medians": valuation.get("overall_medians"),
                              "groups": [{"group": g["name"], "medians": g["medians"]}
                                         for g in valuation.get("groups", [])]}
+    if fed:
+        secs["fed"] = {"label": "Fed watch — implied policy path", "stance": fed.get("stance"),
+                       "reading": fed.get("reading"), "next_fomc": fed.get("next_fomc"),
+                       "cut_odds": fed.get("cut_odds"), "hold_odds": fed.get("hold_odds"),
+                       "hike_odds": fed.get("hike_odds")}
+    secs["signals"] = {"label": "Buy/sell signal model", "posture": playbook.get("posture"),
+                       "buy": [{"name": s["name"], "met": s["met"], "reading": s.get("reading")}
+                               for s in playbook.get("buy_signals", [])],
+                       "sell": [{"name": s["name"], "met": s["met"], "reading": s.get("reading")}
+                                for s in playbook.get("sell_signals", [])]}
     gz = {}
     for k in ("vix", "erp", "mfg_pulse"):
         gv = (gauges or {}).get(k)
         if gv:
             gz[k] = {kk: gv[kk] for kk in ("value", "zone", "spread", "label", "avg") if kk in gv}
+    if gz:
+        secs["gauges"] = {"label": "Sentiment & valuation gauges", **gz}
     return {
         "overall": {"score": overall.get("score"), "label": overall.get("label")},
         "posture": playbook.get("posture"),
-        "gauges": gz,
         "sections": secs,
         "changes_since_last_refresh": changes,
     }
@@ -238,51 +250,61 @@ def _fallback_outlook(overall: dict, playbook: dict) -> str:
     return " ".join(bits)
 
 
-def _build_ai_credit() -> dict | None:
-    """AI buildout credit-risk proxy. Single-name CDS isn't free, so we proxy
-    issuer stress with the equity drawdown of the most debt-financed AI names
-    (the 'canaries') — they crack before the broad credit market does."""
-    if not config.FMP_API_KEY:
+def _build_ai_credit(fetched: dict, ig_oas_metric: dict | None) -> dict | None:
+    """AI buildout credit-risk monitor, built on REAL credit spreads (FRED ICE
+    BofA OAS), rating-tiered to where AI/datacenter debt sits. True single-name
+    CDS / CDX is licensed and not on any free feed, so OAS is the legitimate,
+    daily signal that carries the same stress information. The junk tiers (CCC,
+    single-B) blow out first when the buildout's leveraged names crack."""
+    tiers = []
+    for key, fid, label, note, is_junk in config.AI_CREDIT_OAS:
+        obs = fetched.get(fid, ([], None))[0]
+        if not obs:
+            continue
+        m = indicators.build_metric(
+            {"key": key, "label": label, "section": "credit", "kind": "spread",
+             "unit": "%", "better": "down"}, obs)
+        if m.get("status") != "ok":
+            continue
+        ch = m.get("changes", {})
+        tiers.append({
+            "key": key, "label": label, "note": note, "is_junk": is_junk,
+            "value": m["headline"], "fred_id": fid,
+            "w1": (ch.get("1w") or {}).get("abs"),
+            "m1": (ch.get("1m") or {}).get("abs"),
+            "y1": (ch.get("1y") or {}).get("abs"),
+            "low_1y": m.get("stats", {}).get("low_1y"),
+            "spark": m.get("spark"),
+            "source_url": f"https://fred.stlouisfed.org/series/{fid}",
+        })
+    if not tiers:
         return None
 
-    def _one(item):
-        sym, role, canary = item
-        q = sources.fmp_quote(sym) or {}
-        pc = sources.fmp_price_change(sym) or {}
-        price, yh = q.get("price"), q.get("yearHigh")
-        r = lambda v: round(v, 1) if isinstance(v, (int, float)) else None
-        return {"symbol": sym, "role": role, "canary": canary,
-                "price": round(price, 2) if isinstance(price, (int, float)) else None,
-                "pct_from_high": r((price / yh - 1) * 100) if price and yh else None,
-                "w1": r(pc.get("5D")), "m1": r(pc.get("1M"))}
+    ccc = next((t for t in tiers if t["key"] == "ccc_oas"), None)
+    b = next((t for t in tiers if t["key"] == "b_oas"), None)
+    lead = ccc or b or tiers[0]
+    lead_v, lead_w = lead["value"], lead["w1"]
+    widening = lead_w is not None and lead_w > 0.10
+    junk = [t["value"] for t in tiers if t["is_junk"]]
+    ig = ig_oas_metric.get("headline") if ig_oas_metric and ig_oas_metric.get("status") == "ok" else None
+    hy_ig = round(max(junk) - ig, 2) if junk and ig is not None else None
 
-    with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
-        rows = list(ex.map(_one, config.AI_CREDIT_NAMES))
-    for _ in range(2):  # live-only straggler retry
-        missing = [i for i, c in enumerate(rows) if c["price"] is None]
-        if not missing:
-            break
-        for i in missing:
-            time.sleep(0.3)
-            rows[i] = _one(config.AI_CREDIT_NAMES[i])
-
-    can = [r for r in rows if r["canary"] and r["pct_from_high"] is not None]
-    avg_dd = round(sum(r["pct_from_high"] for r in can) / len(can), 1) if can else None
-    wk = [r["w1"] for r in can if r["w1"] is not None]
-    avg_wk = round(sum(wk) / len(wk), 1) if wk else None
-    if avg_dd is None:
+    if lead_v is None:
         sig = {"label": "n/a", "tone": "ok", "note": "Awaiting data."}
-    elif avg_dd <= -25 or (avg_wk is not None and avg_wk <= -8):
+    elif lead_v >= 9 or (widening and lead_v >= 7):
         sig = {"label": "Cracking", "tone": "bad",
-               "note": f"Debt-funded AI names {avg_dd:.0f}% off their highs — the credit canaries are "
-                       "breaking, a classic bubble-pop lead before broad spreads widen."}
-    elif avg_dd <= -12:
-        sig = {"label": "Wobbling", "tone": "warn",
-               "note": f"AI canaries {avg_dd:.0f}% off highs — early cracks; watch for stress spreading to credit."}
+               "note": f"{lead['label']} at {lead_v:.1f}%{' and widening' if widening else ''} — junk credit, where the "
+                       "debt-funded buildout names sit, is under real stress. This is the bubble-pop lead."}
+    elif lead_v >= 6 or widening:
+        sig = {"label": "Widening", "tone": "warn",
+               "note": f"{lead['label']} at {lead_v:.1f}%{' and widening' if widening else ''} — early cracks in the "
+                       "riskiest credit; watch whether it spreads up the rating ladder."}
     else:
-        sig = {"label": "Firm", "tone": "good",
-               "note": f"AI canaries holding ({avg_dd:.0f}% off highs) — no AI-credit stress yet."}
-    return {"names": rows, "canary_avg_from_high": avg_dd, "canary_avg_w1": avg_wk, "signal": sig}
+        sig = {"label": "Calm", "tone": "good",
+               "note": f"{lead['label']} at {lead_v:.1f}% — junk-credit spreads are calm; no AI-buildout credit stress yet "
+                       "(though tight spreads can mean complacency)."}
+    return {"tiers": tiers, "hy_minus_ig": hy_ig, "lead_label": lead["label"],
+            "deals": config.AI_CREDIT_DEALS, "signal": sig}
 
 
 def _build_gauges(metrics_by_key: dict, cape) -> dict:
@@ -366,6 +388,7 @@ def build(verbose: bool = False) -> dict:
     # the single slowest feed, not their sum.
     all_ids = list(dict.fromkeys(
         [_meta(r)["fred_id"] for r in config.SERIES] + [fid for _, fid in config.CURVE]
+        + [fid for _, fid, _, _, _ in config.AI_CREDIT_OAS]
     ))
     fetched: dict[str, tuple] = {}
     with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
@@ -575,8 +598,8 @@ def build(verbose: bool = False) -> dict:
     # Margin debt (FINRA) — chartable leverage/froth series.
     margin_debt = _build_margin(extras.get("margin"))
 
-    # AI buildout credit-risk proxy (CoreWeave/neoclouds + hyperscalers).
-    ai_credit = _build_ai_credit()
+    # AI buildout credit risk — real rating-tiered OAS (FRED ICE BofA).
+    ai_credit = _build_ai_credit(fetched, metrics_by_key.get("ig_oas"))
 
     # Sentiment & valuation gauges — read the way I do.
     gauges = _build_gauges(metrics_by_key, cape)
@@ -592,20 +615,24 @@ def build(verbose: bool = False) -> dict:
     changes = _compute_changes(prev_snap, metrics_by_key, gauges, overall, playbook, margin_debt, cape)
     macro_ai = llm_mod.analyze_macro(
         _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes,
-                       semis, valuation, ai_credit))
+                       semis, valuation, ai_credit, fed_read))
     ai_sections = (macro_ai or {}).get("sections", {})
+    # Attach AI analysis to every box; fall back to the rule-based text so a box
+    # is never blank (e.g. if a key is missing or the model omits one).
     for sec in sections:
-        if ai_sections.get(sec["key"]):
-            sec["analysis"] = ai_sections[sec["key"]]
+        sec["analysis"] = ai_sections.get(sec["key"]) or sec.get("summary") or None
     curve_analysis = ai_sections.get("curve")
-    if watchlist and ai_sections.get("etfs"):
-        watchlist["analysis"] = ai_sections["etfs"]
-    if ai_credit and ai_sections.get("ai_credit"):
-        ai_credit["analysis"] = ai_sections["ai_credit"]
-    if semis and ai_sections.get("semis"):
-        semis["analysis"] = ai_sections["semis"]
-    if valuation and ai_sections.get("valuation"):
-        valuation["analysis"] = ai_sections["valuation"]
+    if watchlist:
+        watchlist["analysis"] = ai_sections.get("etfs")
+    if ai_credit:
+        ai_credit["analysis"] = ai_sections.get("ai_credit") or ai_credit.get("signal", {}).get("note")
+    if semis:
+        semis["analysis"] = ai_sections.get("semis")
+    if valuation:
+        valuation["analysis"] = ai_sections.get("valuation")
+    if fed_read:
+        fed_read["analysis"] = ai_sections.get("fed") or fed_read.get("reading")
+    playbook["analysis"] = ai_sections.get("signals")
     macro = {
         "regime": (macro_ai or {}).get("regime"),
         "outlook": (macro_ai or {}).get("outlook") or _fallback_outlook(overall, playbook),
@@ -636,6 +663,12 @@ def build(verbose: bool = False) -> dict:
             {"name": "multpl.com", "url": "https://www.multpl.com/shiller-pe",
              "powers": "Shiller CAPE (valuation context)",
              "status": f"CAPE {cape}" if cape is not None else "unavailable"},
+            {"name": "ICE BofA OAS (via FRED)", "url": "https://fred.stlouisfed.org/release?rid=209",
+             "powers": "AI-buildout credit risk — rating-tiered option-adjusted spreads (CDS/CDX are licensed; OAS is the free signal that carries the same information)",
+             "status": "live" if ai_credit else "unavailable"},
+            {"name": "Anthropic Claude", "url": "https://www.anthropic.com",
+             "powers": "Per-section + whole-regime AI analysis (one call per refresh)",
+             "status": "live" if config.ANTHROPIC_API_KEY else "not configured (rule-based fallback)"},
             {"name": "Federal Reserve — FOMC calendar", "url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
              "powers": "Meeting dates for the market-implied Fed signal",
              "status": f"next {fed_read['next_fomc']}" if fed_read and fed_read.get("next_fomc") else "—"},

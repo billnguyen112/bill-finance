@@ -16,8 +16,11 @@ import MacroOutlook from "./components/MacroOutlook.jsx";
 import AiRead from "./components/AiRead.jsx";
 import AiCreditCard from "./components/AiCreditCard.jsx";
 
-function SectionCard({ sec }) {
+function SectionCard({ sec, aiSource }) {
   const [open, setOpen] = useState(false);
+  // The analysis is the model's when it matches the AI run; otherwise it's the
+  // rule-based summary fallback, so tag it accordingly.
+  const isAi = aiSource === "llm" && sec.analysis && sec.analysis !== sec.summary;
   return (
     <section className="card section">
       <div className="section-head">
@@ -28,9 +31,7 @@ function SectionCard({ sec }) {
         )}
       </div>
       {open && sec.explain && <p className="section-explain">{sec.explain}</p>}
-      {sec.analysis
-        ? <AiRead text={sec.analysis} />
-        : sec.summary && <p className="section-summary">{sec.summary}</p>}
+      <AiRead text={sec.analysis} source={isAi ? "llm" : "rules"} />
       <div className="tiles">
         {sec.metrics.map((m) => <MetricTile key={m.key} m={m} />)}
       </div>
@@ -95,6 +96,7 @@ export default function App() {
   };
 
   const overall = snap?.overall;
+  const aiSource = snap?.macro?.source || "rules";
 
   return (
     <div className="app">
@@ -203,30 +205,30 @@ export default function App() {
         <section className="card curve-card">
           <h3>Treasury yield curve</h3>
           <CurveChart curve={snap.curve} />
-          <AiRead text={snap?.curve_analysis} />
+          <AiRead text={snap?.curve_analysis} source={aiSource} />
         </section>
       )}
 
-      <WatchlistCard watchlist={snap?.watchlist} />
+      <WatchlistCard watchlist={snap?.watchlist} aiSource={aiSource} />
 
       <GaugesCard gauges={snap?.gauges} />
 
       {snap?.sections?.map((sec) => (
         <React.Fragment key={sec.key}>
-          <SectionCard sec={sec} />
-          {sec.key === "credit" && <AiCreditCard data={snap?.ai_credit} />}
+          <SectionCard sec={sec} aiSource={aiSource} />
+          {sec.key === "credit" && <AiCreditCard data={snap?.ai_credit} aiSource={aiSource} />}
           {sec.key === "equities" && <MarginDebtCard margin={snap?.margin_debt} />}
         </React.Fragment>
       ))}
       </>)}
 
-      {view === "signals" && <SignalsView playbook={snap?.playbook} />}
+      {view === "signals" && <SignalsView playbook={snap?.playbook} aiSource={aiSource} />}
 
-      {view === "fed" && <FedView fed={snap?.fed} />}
+      {view === "fed" && <FedView fed={snap?.fed} aiSource={aiSource} />}
 
-      {view === "semis" && <SemisView semis={snap?.semis} />}
+      {view === "semis" && <SemisView semis={snap?.semis} aiSource={aiSource} />}
 
-      {view === "valuation" && <ValuationView valuation={snap?.valuation} />}
+      {view === "valuation" && <ValuationView valuation={snap?.valuation} aiSource={aiSource} />}
 
       {view === "sources" && <SourcesView sources={snap?.sources} />}
 

@@ -22,7 +22,7 @@ function mcap(v) {
   return `$${num(v / 1e9, 0)}B`;
 }
 
-export default function SemisView({ semis }) {
+export default function SemisView({ semis, aiSource = "llm" }) {
   if (!semis) {
     return <div className="banner info">Semiconductor data needs the <code>FMP_API_KEY</code> secret. Once it's set, this fills in on the next refresh.</div>;
   }
@@ -51,7 +51,7 @@ export default function SemisView({ semis }) {
         </div>
       </section>
 
-      <AiRead text={s.analysis} />
+      <AiRead text={s.analysis} source={aiSource} />
 
       {s.upcoming_earnings?.length > 0 && (
         <div className="banner info">

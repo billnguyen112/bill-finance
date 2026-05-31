@@ -8,7 +8,7 @@ function signed(v) {
   return <span className={c}>{v > 0 ? "+" : ""}{num(v, 1)}%</span>;
 }
 
-export default function WatchlistCard({ watchlist }) {
+export default function WatchlistCard({ watchlist, aiSource = "llm" }) {
   if (!watchlist || !(watchlist.items || []).length) return null;
   return (
     <section className="card">
@@ -40,7 +40,7 @@ export default function WatchlistCard({ watchlist }) {
           </tbody>
         </table>
       </div>
-      <AiRead text={watchlist.analysis} />
+      <AiRead text={watchlist.analysis} source={aiSource} />
     </section>
   );
 }

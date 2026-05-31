@@ -59,6 +59,26 @@ SEMI_MEGACAP_MCAP = float(os.environ.get("SEMI_MEGACAP_MCAP", "200")) * 1e9
 # feeds, so we proxy issuer stress with the equity drawdown of the most
 # debt-financed AI names ("canaries") vs the hyperscalers that fund the buildout.
 # (symbol, role, is_canary) — canaries lead when the AI-credit cycle turns.
+# AI buildout credit-risk monitor. True single-name CDS / CDX is licensed (ICE/
+# S&P/Markit) and not on any free feed, so we track the real credit-spread signal
+# that carries the same information: FRED ICE BofA option-adjusted spreads (OAS),
+# rating-tiered to localise stress to where AI/datacenter debt sits. The junk
+# tiers (CCC, single-B) blow out first when the buildout's leveraged names crack.
+# (key, fred_id, label, note, is_junk)
+AI_CREDIT_OAS = [
+    ("ccc_oas", "BAMLH0A3HYC", "CCC & lower HY OAS", "Most stress-sensitive — CoreWeave-tier junk; the earliest-warning line", True),
+    ("b_oas",   "BAMLH0A2HYB", "Single-B HY OAS",    "Leveraged neocloud / debt-funded buildout tier", True),
+    ("bbb_oas", "BAMLC0A4CBBB", "BBB Corp OAS",       "Lowest investment-grade — where hyperscaler bonds sit", False),
+    ("a_oas",   "BAMLC0A3CA",  "Single-A Corp OAS",  "Top hyperscaler tier (MSFT / AMZN / META)", False),
+]
+# Headline AI-buildout debt deals — no API carries these spreads, so they're a
+# hand-curated annotation tying the macro OAS lines to the actual financings.
+AI_CREDIT_DEALS = [
+    {"name": "Meta / Blue Owl “Hyperion” (Oct 2025)", "spread": "+225 bp over USTs", "detail": "≈$27B debt · A+ · 2049 maturity"},
+    {"name": "CoreWeave senior notes (2025)", "spread": "9.25–9.75% yield", "detail": "$2B+ high-yield · due 2030"},
+    {"name": "CoreWeave secured facility (Jul 2025)", "spread": "SOFR + 400 bp", "detail": "$2.6B · OpenAI-contracted revenue"},
+]
+
 AI_CREDIT_NAMES = [
     ("CRWV", "CoreWeave — neocloud (debt-funded)", True),
     ("NBIS", "Nebius — neocloud", True),

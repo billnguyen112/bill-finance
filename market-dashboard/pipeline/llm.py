@@ -42,24 +42,30 @@ _SYSTEM = (
 )
 
 _INSTRUCTION = (
-    "Below is the current dashboard with each section's readings, their week-over-week (wk), "
-    "1-month (mo) and 1-year (yr) changes, plus the yield curve and the ETF table. Analyse it "
-    "and return a JSON object with EXACTLY these keys:\n"
+    "Below is the current dashboard: each section's readings with week-over-week (wk), "
+    "1-month (mo) and 1-year (yr) changes, plus the yield curve, the ETF table, the AI-credit "
+    "basket, the semiconductor and valuation tabs, the signal model, the Fed panel, and the "
+    "sentiment/valuation gauges. Analyse it and return a JSON object with EXACTLY these keys:\n"
     '- "regime": a short tag for the macro regime right now (e.g. "Late-cycle, liquidity-supported").\n'
     '- "outlook": 2-4 sentences — the whole-regime read, taking EVERYTHING into account: where we '
     "are, what shifted this week, and the single biggest risk or tension.\n"
-    '- "sections": an object whose keys are EXACTLY the section keys provided below (including '
-    '"curve", "etfs", "ai_credit", "semis" and "valuation" when present). For "ai_credit", note '
-    "whether the debt-funded AI 'canaries' are cracking ahead of broad credit. Each value is 1-3 "
-    "sentences that (a) interpret the current "
+    '- "sections": an object whose keys are EXACTLY the section keys provided below (e.g. "rates", '
+    '"inflation", "credit", "liquidity", "equities", "housing", "labor", "growth", "commodities", '
+    '"curve", "etfs", "ai_credit", "semis", "valuation", "signals", "fed", "gauges", "margin"). '
+    "For \"ai_credit\", note whether the debt-funded AI 'canaries' are cracking ahead of broad "
+    "credit. Each value is 1-3 PLAIN-TEXT sentences (no markdown) that (a) interpret the current "
     "numbers, (b) note the most important week-over-week move, and (c) flag anything that doesn't "
-    "make sense or diverges. Skip a key only if it has no data.\n"
+    "make sense or diverges. Provide an entry for EVERY key present below.\n"
     "Respond with ONLY the JSON object — no prose, no markdown fences."
 )
 
 
 def _extract_json(txt: str) -> dict | None:
     txt = txt.strip()
+    if txt.startswith("```"):
+        txt = txt.split("```", 2)[1] if txt.count("```") >= 2 else txt.strip("`")
+        if txt.startswith("json"):
+            txt = txt[4:]
     if "{" in txt and "}" in txt:
         txt = txt[txt.find("{"):txt.rfind("}") + 1]
     try:
@@ -87,7 +93,7 @@ def analyze_macro(payload: dict) -> dict | None:
     try:
         resp = client.messages.create(
             model=config.ANTHROPIC_MODEL,
-            max_tokens=2048,
+            max_tokens=8192,
             system=[{"type": "text", "text": _SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user}],
         )

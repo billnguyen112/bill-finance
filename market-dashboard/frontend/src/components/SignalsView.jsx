@@ -1,4 +1,5 @@
 import React from "react";
+import AiRead from "./AiRead.jsx";
 
 const POSTURE_COLOR = {
   "Buy setup (capitulation)": "#3fa66a",
@@ -34,12 +35,13 @@ function SignalRow({ s }) {
   );
 }
 
-export default function SignalsView({ playbook }) {
+export default function SignalsView({ playbook, aiSource = "llm" }) {
   if (!playbook) return <p className="muted">No signal data yet — refresh the data.</p>;
   const { posture, buy_signals, sell_signals, buy_met, buy_total, sell_met, sell_total, pending, fmp_enabled } = playbook;
 
   return (
     <>
+      <AiRead text={playbook.analysis} source={aiSource} />
       <section className="card posture-card">
         <div className="posture-main">
           <span className="hero-eyebrow">Signal model — current posture</span>

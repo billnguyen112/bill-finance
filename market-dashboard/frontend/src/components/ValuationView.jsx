@@ -25,7 +25,7 @@ function Medians({ medians, labels }) {
   );
 }
 
-export default function ValuationView({ valuation }) {
+export default function ValuationView({ valuation, aiSource = "llm" }) {
   if (!valuation) {
     return <div className="banner info">Valuation data needs the <code>FMP_API_KEY</code> secret. It fills in on the next refresh.</div>;
   }
@@ -38,7 +38,7 @@ export default function ValuationView({ valuation }) {
         <Medians medians={valuation.overall_medians} labels={QUAL_LABELS} />
       </section>
 
-      <AiRead text={valuation.analysis} />
+      <AiRead text={valuation.analysis} source={aiSource} />
 
       {valuation.groups.map((g) => (
         <section className="card" key={g.name}>
