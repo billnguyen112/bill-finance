@@ -123,6 +123,10 @@ VARIABLE = {
         "what": "Empire State (NY Fed) manufacturing survey — a timely, free PMI-style read on factory activity.",
         "read": "Above 0 = expansion, below 0 = contraction. A leading growth indicator.",
     },
+    "philly_mfg": {
+        "what": "Philadelphia Fed manufacturing survey (Current General Activity) — the other key regional PMI-style gauge; a free stand-in for the ISM.",
+        "read": "Above 0 = expansion, below 0 = contraction. Read alongside Empire State for the factory pulse.",
+    },
     "small_caps": {
         "what": "Russell 2000 (IWM) — small-cap stocks. More cyclical and domestic than mega-caps; a cleaner risk-appetite and breadth gauge.",
         "read": "Small caps leading = healthy risk-on breadth; lagging badly = narrow, fragile market (mega-cap-only).",

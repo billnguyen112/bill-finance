@@ -20,6 +20,7 @@ import semis as semis_mod
 import valuation as valuation_mod
 import fed as fed_mod
 import views as views_mod
+import watchlist as watchlist_mod
 
 
 def _meta(row) -> dict:
@@ -232,6 +233,7 @@ def build(verbose: bool = False) -> dict:
     playbook = signals_mod.build_playbook(metrics_by_key, cape, overall, extras)
 
     valuation = valuation_mod.build_valuation()
+    watchlist = watchlist_mod.build_watchlist()
 
     # "Their Views" + 3-month Archive — transcript digests of the tracked
     # channels' market updates. The archive is carried forward so each video's
@@ -293,6 +295,7 @@ def build(verbose: bool = False) -> dict:
         "sources": sources_block,
         "semis": semis,
         "valuation": valuation,
+        "watchlist": watchlist,
         "sections": sections,
         "curve": curve,
         "cape": cape,

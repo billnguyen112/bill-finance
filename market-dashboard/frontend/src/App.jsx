@@ -11,6 +11,7 @@ import SourcesView from "./components/SourcesView.jsx";
 import FedView from "./components/FedView.jsx";
 import ViewsView from "./components/ViewsView.jsx";
 import ArchiveView from "./components/ArchiveView.jsx";
+import WatchlistCard from "./components/WatchlistCard.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -204,6 +205,8 @@ export default function App() {
           <CurveChart curve={snap.curve} />
         </section>
       )}
+
+      <WatchlistCard watchlist={snap?.watchlist} />
 
       {snap?.sections?.map((sec) => <SectionCard key={sec.key} sec={sec} />)}
       </>)}

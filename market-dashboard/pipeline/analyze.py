@@ -124,12 +124,13 @@ def signal_for(m: dict) -> dict | None:
             return _sig(0.15, "Above trend", f"CFNAI {v:+.2f} — above-trend growth.")
         return _sig(-0.1, "Below trend", f"CFNAI {v:+.2f} — slightly below trend.")
 
-    if key == "empire_mfg":
+    if key in ("empire_mfg", "philly_mfg"):
+        name = "Empire State" if key == "empire_mfg" else "Philly Fed"
         if v < -10:
-            return _sig(-0.3, "Contracting", f"Empire State {v:+.1f} — factory contraction.")
+            return _sig(-0.3, "Contracting", f"{name} {v:+.1f} — factory contraction.")
         if v > 0:
-            return _sig(0.1, "Expanding", f"Empire State {v:+.1f} — expansion.")
-        return _sig(0.0, "Flat", f"Empire State {v:+.1f}.")
+            return _sig(0.1, "Expanding", f"{name} {v:+.1f} — expansion.")
+        return _sig(0.0, "Flat", f"{name} {v:+.1f}.")
 
     if key in ("small_caps", "regional_banks"):
         pfh = m.get("stats", {}).get("pct_from_high_1y")

@@ -152,6 +152,7 @@ SERIES = [
     ("final_sales",   "A653RL1Q225SBEA",    "Real Final Sales (priv. dom.)", "growth", "rate",  "%",    "up"),
     ("cfnai",         "CFNAI",              "Chicago Fed Activity","growth",      "level",     "",     "up"),
     ("empire_mfg",    "GACDISA066MSFRBNY",  "Empire State Mfg",    "growth",      "level",     "",     "up"),
+    ("philly_mfg",    "GACDFSA066MSFRBPHI", "Philly Fed Mfg",      "growth",      "level",     "",     "up"),
 
     ("wti",           "DCOILWTICO",         "WTI Crude",           "commodities", "price",     "$",    "none"),
     ("brent",         "DCOILBRENTEU",       "Brent Crude",         "commodities", "price",     "$",    "none"),
