@@ -205,6 +205,27 @@ def fmp_next_earnings(symbol: str) -> str | None:
     return min(upcoming) if upcoming else None
 
 
+def fmp_earnings_surprise(symbol: str) -> dict | None:
+    """Most recent REPORTED quarter: actual vs estimated EPS/revenue, with a
+    'missed' flag (actual below estimate). None if unavailable."""
+    d = fmp_stable("earnings", symbol=symbol, limit=8)
+    if not isinstance(d, list):
+        return None
+    reported = [e for e in d if e.get("epsActual") is not None]
+    if not reported:
+        return None
+    reported.sort(key=lambda e: e.get("date", ""))
+    e = reported[-1]
+    eps_a, eps_e = e.get("epsActual"), e.get("epsEstimated")
+    rev_a, rev_e = e.get("revenueActual"), e.get("revenueEstimated")
+    eps_miss = isinstance(eps_a, (int, float)) and isinstance(eps_e, (int, float)) and eps_a < eps_e
+    rev_miss = isinstance(rev_a, (int, float)) and isinstance(rev_e, (int, float)) and rev_a < rev_e
+    return {"date": e.get("date"), "eps_actual": eps_a, "eps_estimated": eps_e,
+            "rev_actual": rev_a, "rev_estimated": rev_e,
+            "eps_miss": bool(eps_miss), "rev_miss": bool(rev_miss),
+            "missed": bool(eps_miss or rev_miss)}
+
+
 def fmp_sectors() -> list[dict] | None:
     """Latest sector performance (percent), averaged across exchanges:
     [{'sector': 'Technology', 'change': 1.2}, ...]."""

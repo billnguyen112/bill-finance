@@ -41,16 +41,18 @@ jobs:
       - name: Install pipeline deps
         run: pip install -r pipeline/requirements.txt
 
-      - name: Carry over score history from the live site
+      - name: Carry over score history + previous snapshot from the live site
         run: |
           mkdir -p data
           BASE="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
           curl -fsSL "$BASE/history.json" -o data/history.json || echo "no published history yet"
+          curl -fsSL "$BASE/snapshot.json" -o data/prev_snapshot.json || echo "no published snapshot yet"
 
       - name: Scrape data + compute snapshot
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python pipeline/run.py refresh
 
       - uses: actions/setup-node@v4

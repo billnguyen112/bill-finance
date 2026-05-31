@@ -192,6 +192,19 @@ body {
 .mdytick, .mdxtick { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
 .md-note { font-size: 12.5px; color: #aab2bf; margin-top: 6px; }
 
+/* Since last refresh box */
+.since-card { border-left: 3px solid var(--accent); }
+.since-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.since-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+.since-headline { font-size: 15px; font-weight: 600; color: var(--text); margin: 8px 0 6px; line-height: 1.45; }
+.since-bullets { margin: 0; padding-left: 18px; }
+.since-bullets li { font-size: 13px; line-height: 1.5; margin-bottom: 5px; color: #c7cdd8; }
+.since-foot { margin-top: 10px; }
+.since-toggle { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; font-family: var(--mono); padding: 0; }
+.since-changes { margin: 8px 0 0; padding-left: 18px; }
+.since-changes li { font-size: 12px; line-height: 1.5; margin-bottom: 4px; color: var(--muted); font-family: var(--mono); }
+.since-asof { font-size: 10.5px; color: #5f6875; font-family: var(--mono); margin-top: 10px; }
+
 /* Explanation layer */
 .info-btn {
   background: none; border: none; color: var(--accent); cursor: pointer;

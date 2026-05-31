@@ -12,6 +12,7 @@ import FedView from "./components/FedView.jsx";
 import WatchlistCard from "./components/WatchlistCard.jsx";
 import GaugesCard from "./components/GaugesCard.jsx";
 import MarginDebtCard from "./components/MarginDebtCard.jsx";
+import SinceLastRefresh from "./components/SinceLastRefresh.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -153,6 +154,7 @@ export default function App() {
       )}
 
       {view === "dashboard" && (<>
+      <SinceLastRefresh data={snap?.since_last_refresh} />
       {overall && (
         <section className="hero card">
           <div className="hero-main">
@@ -204,9 +206,12 @@ export default function App() {
 
       <GaugesCard gauges={snap?.gauges} />
 
-      <MarginDebtCard margin={snap?.margin_debt} />
-
-      {snap?.sections?.map((sec) => <SectionCard key={sec.key} sec={sec} />)}
+      {snap?.sections?.map((sec) => (
+        <React.Fragment key={sec.key}>
+          <SectionCard sec={sec} />
+          {sec.key === "equities" && <MarginDebtCard margin={snap?.margin_debt} />}
+        </React.Fragment>
+      ))}
       </>)}
 
       {view === "signals" && <SignalsView playbook={snap?.playbook} />}

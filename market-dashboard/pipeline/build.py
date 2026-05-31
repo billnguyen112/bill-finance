@@ -20,6 +20,7 @@ import semis as semis_mod
 import valuation as valuation_mod
 import fed as fed_mod
 import watchlist as watchlist_mod
+import llm as llm_mod
 
 
 def _meta(row) -> dict:
@@ -80,6 +81,102 @@ def _build_margin(rows) -> dict | None:
         "mom_pct": mom_pct, "yoy_pct": yoy_pct,
         "peak": peak, "peak_date": peak_d, "pct_from_peak": pct_from_peak,
         "signal": sig, "explain": explanations.VARIABLE.get("margin_debt"),
+    }
+
+
+def _load_prev_snapshot() -> dict:
+    """Previously published snapshot (downloaded by the workflow) for the
+    'since last refresh' diff."""
+    try:
+        return json.loads((config.DATA_DIR / "prev_snapshot.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+_SINCE_KEYS = [
+    "ust_10y", "curve_2s10s", "real_10y", "core_pce", "cpi", "infl_exp_1y",
+    "hy_oas", "ig_oas", "vix", "sp500", "nasdaq", "small_caps", "regional_banks",
+    "net_liquidity", "wti", "brent", "gold", "dollar", "unemployment", "claims",
+    "payrolls", "real_gdp", "final_sales", "mortgage_30y",
+]
+
+
+def _disp(m: dict | None):
+    if not m or m.get("headline") is None:
+        return None
+    h = m["headline"]
+    u = m.get("headline_unit") or m.get("unit") or ""
+    if u == "$M":
+        return f"${h/1e6:.2f}T" if abs(h) >= 1e6 else f"${h/1e3:.0f}B"
+    if u == "%":
+        return f"{h:.2f}%"
+    if u == "% y/y":
+        return f"{h:+.1f}% y/y"
+    if u == "$":
+        return f"${h:,.0f}"
+    if u == "k":
+        return f"{h:,.0f}k"
+    if u == "":
+        return f"{h:,.0f}"
+    return f"{h:g}{u}"
+
+
+def _build_since(prev: dict, metrics_by_key: dict, gauges: dict, overall: dict,
+                 playbook: dict, margin_debt, cape) -> dict:
+    """Diff key readings vs the previous snapshot, then have Claude (or, absent a
+    key, a rule-based fallback) analyse what moved through my rule set."""
+    prev = prev or {}
+    prev_m = {m["key"]: m for sec in prev.get("sections", []) for m in sec.get("metrics", [])}
+    changes = []
+    for key in _SINCE_KEYS:
+        cur = metrics_by_key.get(key)
+        if not cur or cur.get("status") != "ok":
+            continue
+        cs, ps = _disp(cur), _disp(prev_m.get(key))
+        if ps is None:
+            continue
+        sig_c = (cur.get("signal") or {}).get("label")
+        sig_p = (prev_m.get(key, {}).get("signal") or {}).get("label")
+        flipped = sig_c and sig_p and sig_c != sig_p
+        if cs != ps or flipped:
+            flip = f" (read: {sig_p}→{sig_c})" if flipped else ""
+            changes.append(f"{cur['label']}: {ps} → {cs}{flip}")
+
+    po = prev.get("overall") or {}
+    if po.get("score") is not None and po.get("score") != overall.get("score"):
+        changes.append(f"Overall read: {po.get('label')} ({po['score']:+.2f}) → "
+                       f"{overall.get('label')} ({overall.get('score'):+.2f})")
+    pp = (prev.get("playbook") or {}).get("posture")
+    if pp and pp != playbook.get("posture"):
+        changes.append(f"Playbook posture: {pp} → {playbook.get('posture')}")
+    pc = prev.get("cape")
+    if pc is not None and cape is not None and round(pc, 1) != round(cape, 1):
+        changes.append(f"Shiller CAPE: {pc:.1f} → {cape:.1f}")
+    pg = prev.get("gauges") or {}
+    g = gauges or {}
+    if g.get("vix") and pg.get("vix") and g["vix"]["zone"] != pg["vix"]["zone"]:
+        changes.append(f"VIX regime: {pg['vix']['zone']} ({pg['vix']['value']}) → "
+                       f"{g['vix']['zone']} ({g['vix']['value']})")
+    if g.get("erp") and pg.get("erp") and round(g["erp"]["spread"], 2) != round(pg["erp"]["spread"], 2):
+        changes.append(f"Equity risk premium: {pg['erp']['spread']:+.2f}% → {g['erp']['spread']:+.2f}%")
+    pmd = (prev.get("margin_debt") or {}).get("signal", {}).get("label")
+    if margin_debt and pmd and margin_debt["signal"]["label"] != pmd:
+        changes.append(f"Margin debt: {pmd} → {margin_debt['signal']['label']}")
+
+    levels = {metrics_by_key[k]["label"]: _disp(metrics_by_key[k])
+              for k in _SINCE_KEYS if (metrics_by_key.get(k) or {}).get("status") == "ok"}
+    payload = {"changes": changes, "levels": levels, "posture": playbook.get("posture")}
+    analysis = llm_mod.analyze_changes(payload)
+    if not analysis:
+        analysis = ({"headline": f"{len(changes)} change(s) since the last refresh — posture '{playbook.get('posture')}'.",
+                     "bullets": changes[:6], "source": "rules"} if changes else
+                    {"headline": "No material changes since the last refresh.", "bullets": [], "source": "rules"})
+    return {
+        "prev_generated_at": prev.get("generated_at"),
+        "changes": changes,
+        "headline": analysis.get("headline"),
+        "bullets": analysis.get("bullets", []),
+        "source": analysis.get("source", "rules"),
     }
 
 
@@ -324,6 +421,15 @@ def build(verbose: bool = False) -> dict:
         chips = [c for c in semis["companies"] if c.get("group") in semis_mod.CHIP_GROUPS]
         extras["semis_pe"] = [c["fwd_pe"] for c in chips if c.get("fwd_pe")]
         extras["semis_rev"] = [c["rev_yoy"] for c in chips if c.get("rev_yoy") is not None]
+        # Large-cap semiconductor earnings miss = sell trigger.
+        misses = []
+        for c in semis["companies"]:
+            if (c.get("market_cap") or 0) < config.SEMI_MEGACAP_MCAP:
+                continue
+            surp = sources.fmp_earnings_surprise(c["symbol"])
+            if surp and surp["missed"]:
+                misses.append({"symbol": c["symbol"], "name": c.get("name"), **surp})
+        extras["semi_miss"] = misses
     if config.FMP_API_KEY:
         sectors = sources.fmp_sectors()
         extras["sectors"] = sectors
@@ -350,6 +456,10 @@ def build(verbose: bool = False) -> dict:
         gauges["erp"]["explain"] = explanations.VARIABLE.get("erp")
     if gauges.get("vix"):
         gauges["vix"]["explain"] = explanations.VARIABLE.get("vix")
+
+    # "Since last refresh" — diff vs the previous snapshot + my analysis of it.
+    since_last_refresh = _build_since(_load_prev_snapshot(), metrics_by_key, gauges,
+                                      overall, playbook, margin_debt, cape)
 
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
@@ -395,6 +505,7 @@ def build(verbose: bool = False) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
         "generated_at": now,
+        "since_last_refresh": since_last_refresh,
         "overall": overall,
         "playbook": playbook,
         "fed": fed_read,

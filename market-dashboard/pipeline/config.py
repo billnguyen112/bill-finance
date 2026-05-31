@@ -51,9 +51,18 @@ SECTOR_BELLWETHERS = {
     "Real Estate": "PLD",
 }
 # A semis basket trailing P/E above this reads as "crazy" valuation.
-VALUATION_PE_EXTREME = float(os.environ.get("VALUATION_PE_EXTREME", "45"))
+VALUATION_PE_EXTREME = float(os.environ.get("VALUATION_PE_EXTREME", "60"))
 # Median semis YoY revenue growth below this reads as an earnings "plateau".
 PLATEAU_REV_GROWTH = float(os.environ.get("PLATEAU_REV_GROWTH", "5"))
+# A semiconductor at/above this market cap missing earnings is a sell trigger.
+SEMI_MEGACAP_MCAP = float(os.environ.get("SEMI_MEGACAP_MCAP", "200")) * 1e9
+
+# --- Claude API (the "since last refresh" analysis box) --------------------
+# When set, the dashboard runs one quick call per refresh to analyse what
+# changed, through my own rule set. Absent the key, it falls back to a
+# deterministic rule-based summary. Get a key at https://console.anthropic.com
+ANTHROPIC_API_KEY = (os.environ.get("ANTHROPIC_API_KEY") or "").strip() or None
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
 # Network resilience (FRED is reliable from normal IPs; tune for slow links).
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "25"))

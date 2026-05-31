@@ -105,6 +105,18 @@ def _semis_plateau(metrics, cape, ex):
                           f"{'plateauing' if plateau else 'still growing'}")
 
 
+def _semi_miss(metrics, cape, ex):
+    """Sell trigger: a megacap semiconductor missed its last earnings."""
+    misses = (ex or {}).get("semi_miss")
+    if misses is None:
+        return _pending("Awaiting FMP data (semi earnings)")
+    if misses:
+        names = ", ".join(m["symbol"] for m in misses[:4])
+        return _auto(True, f"{names} missed last earnings (EPS/revenue below estimate) — "
+                           "a large-cap semi miss is a distribution warning.")
+    return _auto(False, "No large-cap semiconductor missed last quarter's earnings.")
+
+
 def _fed_pivot(metrics, cape, ex):
     """Sell trigger: market is pricing a pivot from cutting back to HIKING."""
     fed = (ex or {}).get("fed")
@@ -143,6 +155,8 @@ BUY_SPECS = [
      "Leading sectors' bellwether revenue YoY > 0", ("Sector performance", _SECTORS), _leaders_earnings),
 ]
 SELL_SPECS = [
+    ("Large-cap semi earnings miss", "A megacap semiconductor missed its last earnings (EPS or revenue below estimate).",
+     f"Any semi ≥ ${config.SEMI_MEGACAP_MCAP/1e9:.0f}B market cap misses EPS/revenue", ("Semis (SMH)", _SMH), _semi_miss),
     ("Tech/semi earnings plateau", "Semiconductor revenue growth is plateauing.",
      f"Semis median revenue YoY < {config.PLATEAU_REV_GROWTH:.0f}%", ("Semis (SMH)", _SMH), _semis_plateau),
     ("Fed pivots to hiking", "Market-implied rates (3M T-bill vs fed funds, FOMC calendar) signal a pivot from cutting back to hiking.",
@@ -170,7 +184,8 @@ def build_playbook(metrics_by_key: dict, cape, overall: dict, extras: dict | Non
     pending = sum(1 for s in buys + sells if s["kind"] == "pending")
 
     vix_buy = next((s["met"] for s in buys if s["name"] == "VIX > 30"), None)
-    if sell_met >= 2:
+    semi_miss = next((s["met"] for s in sells if s["name"] == "Large-cap semi earnings miss"), None)
+    if sell_met >= 2 or semi_miss:   # a single megacap semi miss is a sell on its own
         posture = "Sell watch"
     elif vix_buy:
         posture = "Buy setup (capitulation)"
