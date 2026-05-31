@@ -21,12 +21,13 @@ FRED_API = "https://api.stlouisfed.org/fred/series/observations"
 _UA = {"User-Agent": "Mozilla/5.0 (market-dashboard)"}
 
 
-def _get(url: str, retries: int | None = None) -> str:
+def _get(url: str, retries: int | None = None, headers: dict | None = None) -> str:
     last = None
     n = config.HTTP_RETRIES if retries is None else retries
+    hdrs = {**_UA, **(headers or {})}
     for attempt in range(n):
         try:
-            req = urllib.request.Request(url, headers=_UA)
+            req = urllib.request.Request(url, headers=hdrs)
             with urllib.request.urlopen(req, timeout=config.HTTP_TIMEOUT) as resp:
                 return resp.read().decode("utf-8", "replace")
         except Exception as exc:  # network flake / timeout
@@ -220,6 +221,45 @@ def fmp_sectors() -> list[dict] | None:
                 agg.setdefault(s, []).append(c)
             return [{"sector": s, "change": round(sum(v) / len(v), 3)} for s, v in agg.items()]
     return None
+
+
+def supadata_transcript(video_id: str) -> str | None:
+    """Full transcript text via Supadata (server-side fetch, no IP block)."""
+    if not config.SUPADATA_API_KEY:
+        return None
+    url = ("https://api.supadata.ai/v1/youtube/transcript"
+           f"?url=https://www.youtube.com/watch?v={video_id}&text=true")
+    try:
+        data = json.loads(_get(url, retries=2, headers={"x-api-key": config.SUPADATA_API_KEY}))
+    except Exception:
+        return None
+    content = data.get("content") if isinstance(data, dict) else None
+    return content if isinstance(content, str) and content.strip() else None
+
+
+def channel_videos(channel_id: str, limit: int = 15) -> list[dict]:
+    """Recent uploads from a channel RSS feed: [{video_id, title, published}]."""
+    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+    try:
+        raw = _get(url, retries=2)
+    except Exception:
+        return []
+    import xml.etree.ElementTree as ET
+    ns = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
+    out = []
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return []
+    for e in root.findall("a:entry", ns):
+        vid = e.findtext("yt:videoId", default="", namespaces=ns)
+        title = (e.findtext("a:title", default="", namespaces=ns) or "").strip()
+        pub = (e.findtext("a:published", default="", namespaces=ns) or "")[:10]
+        if vid:
+            out.append({"video_id": vid, "title": title, "published": pub})
+        if len(out) >= limit:
+            break
+    return out
 
 
 def shiller_cape() -> float | None:

@@ -19,6 +19,7 @@ import signals as signals_mod
 import semis as semis_mod
 import valuation as valuation_mod
 import fed as fed_mod
+import views as views_mod
 
 
 def _meta(row) -> dict:
@@ -179,6 +180,9 @@ def build(verbose: bool = False) -> dict:
 
     valuation = valuation_mod.build_valuation()
 
+    # "Their Views" — transcript digests of the tracked channels' latest updates.
+    views = views_mod.build_views()
+
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
     fred_series = [
@@ -226,6 +230,7 @@ def build(verbose: bool = False) -> dict:
         "overall": overall,
         "playbook": playbook,
         "fed": fed_read,
+        "views": views,
         "sources": sources_block,
         "semis": semis,
         "valuation": valuation,

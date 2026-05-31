@@ -9,6 +9,7 @@ import SemisView from "./components/SemisView.jsx";
 import ValuationView from "./components/ValuationView.jsx";
 import SourcesView from "./components/SourcesView.jsx";
 import FedView from "./components/FedView.jsx";
+import ViewsView from "./components/ViewsView.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -138,6 +139,8 @@ export default function App() {
                   onClick={() => setView("dashboard")}>Dashboard</button>
           <button className={"tab" + (view === "signals" ? " active" : "")}
                   onClick={() => setView("signals")}>Signals</button>
+          <button className={"tab" + (view === "views" ? " active" : "")}
+                  onClick={() => setView("views")}>Their Views</button>
           <button className={"tab" + (view === "fed" ? " active" : "")}
                   onClick={() => setView("fed")}>Fed Watch</button>
           <button className={"tab" + (view === "semis" ? " active" : "")}
@@ -201,6 +204,8 @@ export default function App() {
       </>)}
 
       {view === "signals" && <SignalsView playbook={snap?.playbook} />}
+
+      {view === "views" && <ViewsView views={snap?.views} sections={snap?.sections} />}
 
       {view === "fed" && <FedView fed={snap?.fed} />}
 
