@@ -1,5 +1,4 @@
-"""'What he's pointing at' — a compact watchlist of the ETFs Mark Meldrum
-references most across his market updates (small caps, regional banks, long
+"""A compact watchlist of the key ETFs I track (small caps, regional banks, long
 bonds, credit, defensives, REITs, energy, gold, the broad market).
 """
 

@@ -11,7 +11,7 @@ function VixBand({ vix }) {
   return (
     <div className="gauge-cell">
       <div className="gauge-cell-head">
-        <span className="gc-title">VIX regime <span className="gc-by">— Defiant's fear bands</span></span>
+        <span className="gc-title">VIX regime <span className="gc-by">— my fear bands</span></span>
         <span className="gc-val" style={{ color: toneColor(vix.tone) }}>{num(vix.value, 1)}</span>
       </div>
       <div className="vixband">
@@ -65,7 +65,7 @@ function MfgCell({ mfg }) {
       </div>
       <div className="gc-zone" style={{ color: toneColor(mfg.tone) }}>{mfg.zone}</div>
       <div className="gc-lens">
-        Both analysts watch ISM; this averages the regional Fed surveys as the free equivalent.
+        My free stand-in for the ISM: the average of the regional Fed manufacturing surveys.
         Above 0 = factory expansion (good), below 0 = contraction (bad). (Services PMI isn't freely available.)
       </div>
     </div>
@@ -76,7 +76,7 @@ export default function GaugesCard({ gauges }) {
   if (!gauges || (!gauges.vix && !gauges.erp && !gauges.mfg_pulse)) return null;
   return (
     <section className="card gauges-card">
-      <span className="hero-eyebrow">Sentiment &amp; valuation — read like the analysts</span>
+      <span className="hero-eyebrow">Sentiment &amp; valuation — my rules</span>
       <div className="gauges-grid">
         <VixBand vix={gauges.vix} />
         <ErpCell erp={gauges.erp} />

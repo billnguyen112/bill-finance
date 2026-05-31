@@ -59,7 +59,7 @@ def _one(item) -> dict:
     cf = sources.fmp_cash_flow(sym) or {}
     price = q.get("price")
 
-    # Earnings-quality metrics (his "CFO illusions" lens).
+    # Earnings-quality metrics (my "CFO illusions" check).
     fcf, sbc, ocf, ni = (cf.get("freeCashFlow"), cf.get("stockBasedCompensation"),
                          cf.get("operatingCashFlow"), cf.get("netIncome"))
     fcf_ni = round(fcf / ni, 2) if isinstance(fcf, (int, float)) and ni else None

@@ -34,16 +34,65 @@ def _fetch(fid: str):
         return fid, [], f"{type(exc).__name__}: {exc}"
 
 
+def _build_margin(rows) -> dict | None:
+    """FINRA margin-debt series → a chartable time series plus summary stats and
+    my leverage/froth signal. `rows` are [(\"Mon-YY\", $millions), ...]."""
+    if not rows:
+        return None
+    parsed = []
+    for label, val in rows:
+        try:
+            d = datetime.strptime(label, "%b-%y").date()
+        except (ValueError, TypeError):
+            continue
+        parsed.append((d.isoformat(), val))
+    if len(parsed) < 2:
+        return None
+    parsed.sort()
+    series = [[d, v] for d, v in parsed]
+    latest_d, latest = series[-1]
+    prev = series[-2][1]
+    yoy = series[-13][1] if len(series) >= 13 else None
+    peak = max(v for _, v in series)
+    peak_d = next(d for d, v in series if v == peak)
+    mom_pct = round((latest / prev - 1) * 100, 1) if prev else None
+    yoy_pct = round((latest / yoy - 1) * 100, 1) if yoy else None
+    pct_from_peak = round((latest / peak - 1) * 100, 1) if peak else None
+
+    rising = mom_pct is not None and mom_pct > 0
+    if pct_from_peak is not None and -12 <= pct_from_peak <= -2 and mom_pct is not None and mom_pct < 0:
+        sig = {"label": "Rolling over", "tone": "bad",
+               "note": f"Margin debt {pct_from_peak:.0f}% off its peak and falling — a rollover from the highs can force selling."}
+    elif pct_from_peak is not None and pct_from_peak < -12:
+        sig = {"label": "De-risking", "tone": "good",
+               "note": f"Margin debt {pct_from_peak:.0f}% off its peak — leverage is being unwound."}
+    elif yoy_pct is not None and yoy_pct >= 15 and rising:
+        sig = {"label": "Leverage building", "tone": "warn",
+               "note": f"Margin debt +{yoy_pct:.0f}% y/y and still rising — speculative leverage building (late-cycle)."}
+    elif rising:
+        sig = {"label": "Rising", "tone": "warn",
+               "note": f"Margin debt rising (+{mom_pct:.1f}% m/m)."}
+    else:
+        sig = {"label": "Steady", "tone": "ok", "note": "Margin debt little changed month over month."}
+
+    return {
+        "series": series, "latest": latest, "latest_date": latest_d,
+        "mom_pct": mom_pct, "yoy_pct": yoy_pct,
+        "peak": peak, "peak_date": peak_d, "pct_from_peak": pct_from_peak,
+        "signal": sig, "explain": explanations.VARIABLE.get("margin_debt"),
+    }
+
+
 def _build_gauges(metrics_by_key: dict, cape) -> dict:
     """VIX regime band, equity risk premium, and a free PMI-style manufacturing
-    pulse — the sentiment/valuation reads DG and MM lean on every week."""
+    pulse — the sentiment/valuation reads I lean on every week."""
     def _hl(key):
         m = metrics_by_key.get(key)
         return m.get("headline") if m and m.get("status") == "ok" else None
 
     gauges: dict = {}
 
-    # VIX regime — Defiant's explicit bands (15-20 = calm/uptrend).
+    # VIX regime — my explicit bands (15-20 = calm/uptrend).
     vix = _hl("vix")
     if vix is not None:
         if vix < 15:
@@ -68,7 +117,7 @@ def _build_gauges(metrics_by_key: dict, cape) -> dict:
                      "Fear/dislocation."),
         }
 
-    # Equity risk premium — DG's earnings-yield-vs-10Y check (CAPE-based).
+    # Equity risk premium — my earnings-yield-vs-10Y check (CAPE-based).
     ten = _hl("ust_10y")
     if cape and ten is not None:
         ey = round(100.0 / cape, 2)
@@ -204,7 +253,7 @@ def build(verbose: bool = False) -> dict:
                  "kind": "price", "unit": "$M", "better": "up"}, net)
             _attach(nm, "net_liquidity", "https://fred.stlouisfed.org/series/WALCL")
 
-    # Small caps (IWM) + regional banks (KRE) via FMP — both signals he watches.
+    # Small caps (IWM) + regional banks (KRE) via FMP — both signals I watch.
     if config.FMP_API_KEY:
         for sym, key, label, better in [("IWM", "small_caps", "Russell 2000 (small caps)", "up"),
                                         ("KRE", "regional_banks", "Regional Banks (KRE)", "up")]:
@@ -292,7 +341,10 @@ def build(verbose: bool = False) -> dict:
     valuation = valuation_mod.build_valuation()
     watchlist = watchlist_mod.build_watchlist()
 
-    # Sentiment & valuation gauges — read the way DG/MM do.
+    # Margin debt (FINRA) — chartable leverage/froth series.
+    margin_debt = _build_margin(extras.get("margin"))
+
+    # Sentiment & valuation gauges — read the way I do.
     gauges = _build_gauges(metrics_by_key, cape)
     if gauges.get("erp"):
         gauges["erp"]["explain"] = explanations.VARIABLE.get("erp")
@@ -351,6 +403,7 @@ def build(verbose: bool = False) -> dict:
         "valuation": valuation,
         "watchlist": watchlist,
         "gauges": gauges,
+        "margin_debt": margin_debt,
         "sections": sections,
         "curve": curve,
         "cape": cape,

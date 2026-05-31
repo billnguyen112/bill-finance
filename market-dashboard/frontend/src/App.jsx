@@ -11,6 +11,7 @@ import SourcesView from "./components/SourcesView.jsx";
 import FedView from "./components/FedView.jsx";
 import WatchlistCard from "./components/WatchlistCard.jsx";
 import GaugesCard from "./components/GaugesCard.jsx";
+import MarginDebtCard from "./components/MarginDebtCard.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -95,7 +96,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <h1>Macro Desk</h1>
-          <span className="sub">My weekly macro read — raw data, interpreted through Meldrum's &amp; Defiant's playbooks</span>
+          <span className="sub">My weekly macro read — raw data, interpreted through my own rules</span>
         </div>
         <div className="controls">
           <button className="btn ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -202,6 +203,8 @@ export default function App() {
       <WatchlistCard watchlist={snap?.watchlist} />
 
       <GaugesCard gauges={snap?.gauges} />
+
+      <MarginDebtCard margin={snap?.margin_debt} />
 
       {snap?.sections?.map((sec) => <SectionCard key={sec.key} sec={sec} />)}
       </>)}

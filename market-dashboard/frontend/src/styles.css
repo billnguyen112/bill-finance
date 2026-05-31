@@ -5,8 +5,8 @@
   --line: #2a313c;
   --text: #e6e9ef;
   --muted: #8b94a3;
-  --accent: #4f7cff;
-  --accent-2: #84a6ff;
+  --accent: #d9a441;
+  --accent-2: #e9bd6b;
   --green: #3fa66a;
   --red: #cc4b4b;
   --radius: 12px;
@@ -22,8 +22,8 @@
   --line: #dde3ea;
   --text: #1a2230;
   --muted: #5d6b7c;
-  --accent: #2b4ed1;
-  --accent-2: #1d3aa8;
+  --accent: #b8801f;
+  --accent-2: #936718;
   --green: #2e8b57;
   --red: #c0392b;
 }
@@ -177,6 +177,20 @@ body {
 .erp-n { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--text); }
 .erp-l { font-size: 10.5px; color: var(--muted); }
 .erp-op { font-size: 18px; color: var(--muted); }
+
+/* Margin debt card */
+.md-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.md-latest { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.md-badge { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border: 1px solid; border-radius: 999px; }
+.md-stats { display: flex; flex-wrap: wrap; gap: 26px; margin: 12px 0 4px; }
+.md-stat { display: flex; flex-direction: column; gap: 1px; }
+.md-n { font-family: var(--mono); font-size: 15px; font-weight: 700; }
+.md-n .pos { color: var(--green); } .md-n .neg { color: var(--red); }
+.md-l { font-size: 10.5px; color: var(--muted); }
+.mdchart { display: block; margin: 8px 0 4px; }
+.mdgrid { stroke: var(--line); stroke-width: 1; }
+.mdytick, .mdxtick { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
+.md-note { font-size: 12.5px; color: #aab2bf; margin-top: 6px; }
 
 /* Explanation layer */
 .info-btn {
