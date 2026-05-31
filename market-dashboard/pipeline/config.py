@@ -53,7 +53,24 @@ SECTOR_BELLWETHERS = {
 # A semis basket trailing P/E above this reads as "crazy" valuation.
 VALUATION_PE_EXTREME = float(os.environ.get("VALUATION_PE_EXTREME", "60"))
 # A semiconductor at/above this market cap missing earnings is a sell trigger.
-SEMI_MEGACAP_MCAP = float(os.environ.get("SEMI_MEGACAP_MCAP", "20")) * 1e9
+SEMI_MEGACAP_MCAP = float(os.environ.get("SEMI_MEGACAP_MCAP", "200")) * 1e9
+
+# AI buildout credit-risk proxy. True single-name CDS isn't available from free
+# feeds, so we proxy issuer stress with the equity drawdown of the most
+# debt-financed AI names ("canaries") vs the hyperscalers that fund the buildout.
+# (symbol, role, is_canary) — canaries lead when the AI-credit cycle turns.
+AI_CREDIT_NAMES = [
+    ("CRWV", "CoreWeave — neocloud (debt-funded)", True),
+    ("NBIS", "Nebius — neocloud", True),
+    ("APLD", "Applied Digital — datacenter", True),
+    ("SMCI", "Super Micro — AI servers", True),
+    ("VRT", "Vertiv — datacenter infra", True),
+    ("ORCL", "Oracle — hyperscaler (capex/debt)", True),
+    ("MSFT", "Microsoft — hyperscaler", False),
+    ("META", "Meta — hyperscaler", False),
+    ("AMZN", "Amazon — hyperscaler", False),
+    ("GOOGL", "Alphabet — hyperscaler", False),
+]
 
 # --- Claude API (the "since last refresh" analysis box) --------------------
 # When set, the dashboard runs one quick call per refresh to analyse what

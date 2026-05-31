@@ -104,7 +104,7 @@ def _semi_miss(metrics, cape, ex):
         parts = [f"{m['symbol']} (missed {'EPS' if m.get('eps_miss') else 'revenue'})" for m in misses[:5]]
         return _auto(True, f"{'; '.join(parts)} — a semi missing is the real plateau signal, "
                            "since so much growth is already priced in.")
-    return _auto(False, "No tracked semiconductor (≥ $20B) missed last quarter's earnings.")
+    return _auto(False, f"No semiconductor (≥ ${config.SEMI_MEGACAP_MCAP/1e9:.0f}B) missed last quarter's earnings.")
 
 
 def _fed_pivot(metrics, cape, ex):

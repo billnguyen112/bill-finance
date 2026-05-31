@@ -1,6 +1,36 @@
 import React from "react";
 import { num } from "../format.js";
 
+function RateChart({ c }) {
+  const data = c.spark || [];
+  const W = 300, H = 92, pad = { l: 4, r: 4, t: 4, b: 4 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+  const vals = data.map((p) => p[1]);
+  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const x = (i) => pad.l + (i / (data.length - 1)) * iw;
+  const y = (v) => pad.t + ih - ((v - min) / span) * ih;
+  const line = data.map((p, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(" ");
+  const w1 = c.w1;
+  const wcls = w1 == null ? "" : w1 > 0 ? "pos" : w1 < 0 ? "neg" : "";
+  return (
+    <div className="fed-chart">
+      <div className="fed-chart-top">
+        <span className="fed-chart-label">{c.label}</span>
+        <span className="fed-chart-val">{c.value != null ? `${num(c.value, 2)}${c.unit}` : "—"}</span>
+      </div>
+      {data.length > 1 && (
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="fed-spark" preserveAspectRatio="none">
+          <path d={line} fill="none" strokeWidth="1.6" />
+        </svg>
+      )}
+      <div className="fed-chart-foot">
+        {w1 != null ? <span className={wcls}>{w1 > 0 ? "+" : ""}{num(w1, 2)} wk</span> : <span />}
+        {c.id && <a className="src-link" href={`https://fred.stlouisfed.org/series/${c.id}`} target="_blank" rel="noreferrer">source ↗</a>}
+      </div>
+    </div>
+  );
+}
+
 const STANCE = {
   hike: { color: "#cc4b4b", label: "Hike risk" },
   cut: { color: "#3fa66a", label: "Cuts priced" },
@@ -44,6 +74,15 @@ export default function FedView({ fed }) {
 
         <p className="fed-reading">{fed.reading}</p>
       </section>
+
+      {fed.charts?.length > 0 && (
+        <section className="card">
+          <h3 className="val-h">Rates I watch every week <span className="cnt">2-year history</span></h3>
+          <div className="fed-charts">
+            {fed.charts.map((c) => <RateChart key={c.label} c={c} />)}
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <h3 className="val-h">Leading indicators <span className="cnt">click ↗ to chart at source</span></h3>

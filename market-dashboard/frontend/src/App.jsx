@@ -13,6 +13,8 @@ import WatchlistCard from "./components/WatchlistCard.jsx";
 import GaugesCard from "./components/GaugesCard.jsx";
 import MarginDebtCard from "./components/MarginDebtCard.jsx";
 import MacroOutlook from "./components/MacroOutlook.jsx";
+import AiRead from "./components/AiRead.jsx";
+import AiCreditCard from "./components/AiCreditCard.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -27,7 +29,7 @@ function SectionCard({ sec }) {
       </div>
       {open && sec.explain && <p className="section-explain">{sec.explain}</p>}
       {sec.analysis
-        ? <p className="section-analysis">{sec.analysis}</p>
+        ? <AiRead text={sec.analysis} />
         : sec.summary && <p className="section-summary">{sec.summary}</p>}
       <div className="tiles">
         {sec.metrics.map((m) => <MetricTile key={m.key} m={m} />)}
@@ -201,7 +203,7 @@ export default function App() {
         <section className="card curve-card">
           <h3>Treasury yield curve</h3>
           <CurveChart curve={snap.curve} />
-          {snap?.curve_analysis && <p className="section-analysis">{snap.curve_analysis}</p>}
+          <AiRead text={snap?.curve_analysis} />
         </section>
       )}
 
@@ -212,6 +214,7 @@ export default function App() {
       {snap?.sections?.map((sec) => (
         <React.Fragment key={sec.key}>
           <SectionCard sec={sec} />
+          {sec.key === "credit" && <AiCreditCard data={snap?.ai_credit} />}
           {sec.key === "equities" && <MarginDebtCard margin={snap?.margin_debt} />}
         </React.Fragment>
       ))}

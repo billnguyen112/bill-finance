@@ -37,6 +37,8 @@ export default function ValuationView({ valuation }) {
         <Medians medians={valuation.overall_medians} labels={QUAL_LABELS} />
       </section>
 
+      <AiRead text={valuation.analysis} />
+
       {valuation.groups.map((g) => (
         <section className="card" key={g.name}>
           <h3 className="val-h">{g.name} <span className="cnt">group median</span></h3>

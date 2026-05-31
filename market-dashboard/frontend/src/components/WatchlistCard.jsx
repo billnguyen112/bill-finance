@@ -1,5 +1,6 @@
 import React from "react";
 import { num } from "../format.js";
+import AiRead from "./AiRead.jsx";
 
 function signed(v) {
   if (v == null) return <span className="muted">—</span>;
@@ -39,7 +40,7 @@ export default function WatchlistCard({ watchlist }) {
           </tbody>
         </table>
       </div>
-      {watchlist.analysis && <p className="section-analysis">{watchlist.analysis}</p>}
+      <AiRead text={watchlist.analysis} />
     </section>
   );
 }

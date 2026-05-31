@@ -1,5 +1,6 @@
 import React from "react";
 import { num, fmtDate } from "../format.js";
+import AiRead from "./AiRead.jsx";
 
 function strengthColor(s) {
   if (s == null) return "#8b94a3";
@@ -49,6 +50,8 @@ export default function SemisView({ semis }) {
           <Stat label="median 3m return" value={s.median_3m != null ? `${s.median_3m > 0 ? "+" : ""}${num(s.median_3m, 1)}%` : "—"} />
         </div>
       </section>
+
+      <AiRead text={s.analysis} />
 
       {s.upcoming_earnings?.length > 0 && (
         <div className="banner info">

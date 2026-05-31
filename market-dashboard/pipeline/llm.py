@@ -49,7 +49,9 @@ _INSTRUCTION = (
     '- "outlook": 2-4 sentences — the whole-regime read, taking EVERYTHING into account: where we '
     "are, what shifted this week, and the single biggest risk or tension.\n"
     '- "sections": an object whose keys are EXACTLY the section keys provided below (including '
-    '"curve" and "etfs" if present). Each value is 1-3 sentences that (a) interpret the current '
+    '"curve", "etfs", "ai_credit", "semis" and "valuation" when present). For "ai_credit", note '
+    "whether the debt-funded AI 'canaries' are cracking ahead of broad credit. Each value is 1-3 "
+    "sentences that (a) interpret the current "
     "numbers, (b) note the most important week-over-week move, and (c) flag anything that doesn't "
     "make sense or diverges. Skip a key only if it has no data.\n"
     "Respond with ONLY the JSON object — no prose, no markdown fences."

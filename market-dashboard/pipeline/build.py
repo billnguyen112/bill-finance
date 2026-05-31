@@ -178,7 +178,8 @@ def _metric_brief(m: dict) -> dict:
     return d
 
 
-def _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes) -> dict:
+def _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes,
+                   semis=None, valuation=None, ai_credit=None) -> dict:
     """Compact view of the whole dashboard for the analysis call."""
     secs = {}
     for sec in sections:
@@ -193,6 +194,25 @@ def _macro_payload(sections, gauges, curve, watchlist, overall, playbook, change
             {"sym": e.get("symbol"), "role": e.get("role"), "wk": e.get("w1"),
              "mo": e.get("m1"), "yr": e.get("y1"), "from_high": e.get("pct_from_high")}
             for e in watchlist["items"]]}
+    if ai_credit and ai_credit.get("names"):
+        secs["ai_credit"] = {"label": "AI buildout credit-risk proxy (CoreWeave/neoclouds + hyperscalers)",
+                             "canary_avg_from_high": ai_credit.get("canary_avg_from_high"),
+                             "names": [{"sym": n["symbol"], "canary": n["canary"],
+                                        "from_high": n["pct_from_high"], "wk": n["w1"], "mo": n["m1"]}
+                                       for n in ai_credit["names"]]}
+    if semis:
+        secs["semis"] = {"label": "Semiconductors", "strength": semis.get("strength"),
+                         "strength_label": semis.get("strength_label"),
+                         "breadth_50dma": semis.get("breadth_50dma"),
+                         "median_rev_growth": semis.get("median_rev_growth"),
+                         "near_high_pct": semis.get("near_high_pct"),
+                         "groups": [{"group": g, "names": [c["symbol"] for c in semis["companies"] if c["group"] == g][:6]}
+                                    for g in semis.get("group_order", [])]}
+    if valuation:
+        secs["valuation"] = {"label": "Tech & semis valuation",
+                             "overall_medians": valuation.get("overall_medians"),
+                             "groups": [{"group": g["name"], "medians": g["medians"]}
+                                        for g in valuation.get("groups", [])]}
     gz = {}
     for k in ("vix", "erp", "mfg_pulse"):
         gv = (gauges or {}).get(k)
@@ -216,6 +236,53 @@ def _fallback_outlook(overall: dict, playbook: dict) -> str:
     if con:
         bits.append("Concerns: " + "; ".join(con))
     return " ".join(bits)
+
+
+def _build_ai_credit() -> dict | None:
+    """AI buildout credit-risk proxy. Single-name CDS isn't free, so we proxy
+    issuer stress with the equity drawdown of the most debt-financed AI names
+    (the 'canaries') — they crack before the broad credit market does."""
+    if not config.FMP_API_KEY:
+        return None
+
+    def _one(item):
+        sym, role, canary = item
+        q = sources.fmp_quote(sym) or {}
+        pc = sources.fmp_price_change(sym) or {}
+        price, yh = q.get("price"), q.get("yearHigh")
+        r = lambda v: round(v, 1) if isinstance(v, (int, float)) else None
+        return {"symbol": sym, "role": role, "canary": canary,
+                "price": round(price, 2) if isinstance(price, (int, float)) else None,
+                "pct_from_high": r((price / yh - 1) * 100) if price and yh else None,
+                "w1": r(pc.get("5D")), "m1": r(pc.get("1M"))}
+
+    with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
+        rows = list(ex.map(_one, config.AI_CREDIT_NAMES))
+    for _ in range(2):  # live-only straggler retry
+        missing = [i for i, c in enumerate(rows) if c["price"] is None]
+        if not missing:
+            break
+        for i in missing:
+            time.sleep(0.3)
+            rows[i] = _one(config.AI_CREDIT_NAMES[i])
+
+    can = [r for r in rows if r["canary"] and r["pct_from_high"] is not None]
+    avg_dd = round(sum(r["pct_from_high"] for r in can) / len(can), 1) if can else None
+    wk = [r["w1"] for r in can if r["w1"] is not None]
+    avg_wk = round(sum(wk) / len(wk), 1) if wk else None
+    if avg_dd is None:
+        sig = {"label": "n/a", "tone": "ok", "note": "Awaiting data."}
+    elif avg_dd <= -25 or (avg_wk is not None and avg_wk <= -8):
+        sig = {"label": "Cracking", "tone": "bad",
+               "note": f"Debt-funded AI names {avg_dd:.0f}% off their highs — the credit canaries are "
+                       "breaking, a classic bubble-pop lead before broad spreads widen."}
+    elif avg_dd <= -12:
+        sig = {"label": "Wobbling", "tone": "warn",
+               "note": f"AI canaries {avg_dd:.0f}% off highs — early cracks; watch for stress spreading to credit."}
+    else:
+        sig = {"label": "Firm", "tone": "good",
+               "note": f"AI canaries holding ({avg_dd:.0f}% off highs) — no AI-credit stress yet."}
+    return {"names": rows, "canary_avg_from_high": avg_dd, "canary_avg_w1": avg_wk, "signal": sig}
 
 
 def _build_gauges(metrics_by_key: dict, cape) -> dict:
@@ -453,6 +520,27 @@ def build(verbose: bool = False) -> dict:
         for it in fed_read["panel"]:
             it["source_url"] = f"https://fred.stlouisfed.org/series/{it['id']}"
 
+        # Charts to watch every week: the policy rate, the front end, the long
+        # end, the curve, real yields and breakevens — each with its 2y history.
+        chart_keys = [("fed_funds", "DFF"), ("ust_2y", "DGS2"), ("ust_10y", "DGS10"),
+                      ("ust_30y", "DGS30"), ("curve_2s10s", "T10Y2Y"),
+                      ("real_10y", "DFII10"), ("breakeven_10y", "T10YIE")]
+        charts = []
+        # 3M T-bill (front of the implied path) — straight from the fetched series.
+        m3 = fetched.get("DGS3MO", ([], None))[0]
+        if m3:
+            charts.append({"label": "3M T-bill", "unit": "%", "value": round(m3[-1][1], 2),
+                           "w1": None, "id": "DGS3MO",
+                           "spark": indicators._downsample([(d, v) for d, v in m3[-520:]])})
+        for key, fid in chart_keys:
+            m = metrics_by_key.get(key)
+            if m and m.get("status") == "ok" and m.get("spark"):
+                charts.append({"label": m["label"], "unit": m.get("headline_unit") or m.get("unit") or "",
+                               "value": m.get("headline"),
+                               "w1": (m.get("changes", {}).get("1w") or {}).get("abs"),
+                               "id": fid, "spark": m["spark"]})
+        fed_read["charts"] = charts
+
     # Extra data for the buy/sell signal model.
     extras = {"margin": sources.finra_margin_debt(), "fed": fed_read}
     if semis:
@@ -487,6 +575,9 @@ def build(verbose: bool = False) -> dict:
     # Margin debt (FINRA) — chartable leverage/froth series.
     margin_debt = _build_margin(extras.get("margin"))
 
+    # AI buildout credit-risk proxy (CoreWeave/neoclouds + hyperscalers).
+    ai_credit = _build_ai_credit()
+
     # Sentiment & valuation gauges — read the way I do.
     gauges = _build_gauges(metrics_by_key, cape)
     if gauges.get("erp"):
@@ -500,7 +591,8 @@ def build(verbose: bool = False) -> dict:
     prev_snap = _load_prev_snapshot()
     changes = _compute_changes(prev_snap, metrics_by_key, gauges, overall, playbook, margin_debt, cape)
     macro_ai = llm_mod.analyze_macro(
-        _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes))
+        _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes,
+                       semis, valuation, ai_credit))
     ai_sections = (macro_ai or {}).get("sections", {})
     for sec in sections:
         if ai_sections.get(sec["key"]):
@@ -508,6 +600,12 @@ def build(verbose: bool = False) -> dict:
     curve_analysis = ai_sections.get("curve")
     if watchlist and ai_sections.get("etfs"):
         watchlist["analysis"] = ai_sections["etfs"]
+    if ai_credit and ai_sections.get("ai_credit"):
+        ai_credit["analysis"] = ai_sections["ai_credit"]
+    if semis and ai_sections.get("semis"):
+        semis["analysis"] = ai_sections["semis"]
+    if valuation and ai_sections.get("valuation"):
+        valuation["analysis"] = ai_sections["valuation"]
     macro = {
         "regime": (macro_ai or {}).get("regime"),
         "outlook": (macro_ai or {}).get("outlook") or _fallback_outlook(overall, playbook),
@@ -571,6 +669,7 @@ def build(verbose: bool = False) -> dict:
         "watchlist": watchlist,
         "gauges": gauges,
         "margin_debt": margin_debt,
+        "ai_credit": ai_credit,
         "sections": sections,
         "curve": curve,
         "cape": cape,
