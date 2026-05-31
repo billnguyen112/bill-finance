@@ -1,5 +1,6 @@
 import React from "react";
 import { num } from "../format.js";
+import AiRead from "./AiRead.jsx";
 
 const VAL_LABELS = [["Trailing P/E", "pe"], ["Forward P/E", "fwd_pe"], ["P/E FY28", "fwd_pe_2028"], ["P/B", "pb"], ["P/S", "ps"], ["EV/EBITDA", "ev_ebitda"]];
 const QUAL_LABELS = [["Gross margin", "gross_margin", "%"], ["Op margin", "op_margin", "%"], ["FCF / Net income", "fcf_ni", "x"]];
