@@ -95,6 +95,15 @@ def signal_for(m: dict) -> dict | None:
             return _sig(-0.2, "Elevated", f"10Y breakeven {v:.2f}% — market inflation expectations sticky.")
         return _sig(0.1, "Anchored", f"10Y breakeven {v:.2f}% — expectations anchored.")
 
+    if key == "infl_exp_1y":
+        d = _chg(m, "1m")
+        trend = " and rising" if d and d > 0.1 else (" and easing" if d and d < -0.1 else "")
+        if v >= 4:
+            return _sig(-0.4, "Un-anchoring", f"1y inflation expectations {v:.1f}%{trend} — households bracing for more inflation.")
+        if v >= 3:
+            return _sig(-0.2, "Sticky", f"1y inflation expectations {v:.1f}%{trend} — above the comfort zone.")
+        return _sig(0.1, "Anchored", f"1y inflation expectations {v:.1f}%{trend} — contained.")
+
     if key in ("sp500", "nasdaq"):
         pfh = m.get("stats", {}).get("pct_from_high_1y")
         if pfh is None:
@@ -249,7 +258,7 @@ def overall_read(metrics_by_key: dict) -> dict:
 
 _SECTION_LEADS = {
     "rates": ["fed_funds", "ust_10y", "curve_2s10s", "real_10y"],
-    "inflation": ["core_pce", "core_cpi", "cpi"],
+    "inflation": ["core_pce", "core_cpi", "cpi", "infl_exp_1y"],
     "credit": ["hy_oas", "ig_oas"],
     "liquidity": ["net_liquidity", "tga", "reverse_repo"],
     "equities": ["sp500", "small_caps", "regional_banks", "vix"],

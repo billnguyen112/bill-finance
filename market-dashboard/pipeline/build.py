@@ -34,6 +34,74 @@ def _fetch(fid: str):
         return fid, [], f"{type(exc).__name__}: {exc}"
 
 
+def _build_gauges(metrics_by_key: dict, cape) -> dict:
+    """VIX regime band, equity risk premium, and a free PMI-style manufacturing
+    pulse — the sentiment/valuation reads DG and MM lean on every week."""
+    def _hl(key):
+        m = metrics_by_key.get(key)
+        return m.get("headline") if m and m.get("status") == "ok" else None
+
+    gauges: dict = {}
+
+    # VIX regime — Defiant's explicit bands (15-20 = calm/uptrend).
+    vix = _hl("vix")
+    if vix is not None:
+        if vix < 15:
+            zone, tone = "Complacent", "warn"
+        elif vix < 20:
+            zone, tone = "Calm / uptrend", "good"
+        elif vix < 30:
+            zone, tone = "Elevated", "warn"
+        else:
+            zone, tone = "Fear", "bad"
+        gauges["vix"] = {
+            "value": round(vix, 1), "zone": zone, "tone": tone, "max": 45,
+            "bands": [
+                {"label": "Complacent", "lo": 0, "hi": 15, "tone": "warn"},
+                {"label": "Calm", "lo": 15, "hi": 20, "tone": "good"},
+                {"label": "Elevated", "lo": 20, "hi": 30, "tone": "warn"},
+                {"label": "Fear", "lo": 30, "hi": 45, "tone": "bad"},
+            ],
+            "note": ("Calm, healthy-uptrend zone (15–20)." if zone == "Calm / uptrend" else
+                     "Below 15 — calm, but watch for complacency." if zone == "Complacent" else
+                     "Elevated volatility — stress building." if zone == "Elevated" else
+                     "Fear/dislocation."),
+        }
+
+    # Equity risk premium — DG's earnings-yield-vs-10Y check (CAPE-based).
+    ten = _hl("ust_10y")
+    if cape and ten is not None:
+        ey = round(100.0 / cape, 2)
+        spread = round(ey - ten, 2)
+        if spread <= -1:
+            label, tone = "Negative — stocks richly valued vs bonds", "bad"
+        elif spread < 1:
+            label, tone = "Thin — little equity cushion", "warn"
+        elif spread < 3:
+            label, tone = "Moderate", "ok"
+        else:
+            label, tone = "Wide — equities well compensated", "good"
+        gauges["erp"] = {"earnings_yield": ey, "ten_year": round(ten, 2),
+                         "spread": spread, "cape": round(cape, 1), "label": label, "tone": tone}
+
+    # Manufacturing pulse — free ISM stand-in: average of the regional Fed surveys.
+    emp, phl = _hl("empire_mfg"), _hl("philly_mfg")
+    parts = [x for x in (emp, phl) if x is not None]
+    if parts:
+        avg = round(sum(parts) / len(parts), 1)
+        if avg <= -10:
+            zone, tone = "Contracting", "bad"
+        elif avg < 0:
+            zone, tone = "Soft", "warn"
+        elif avg < 10:
+            zone, tone = "Expanding", "good"
+        else:
+            zone, tone = "Strong", "good"
+        gauges["mfg_pulse"] = {"avg": avg, "empire": emp, "philly": phl,
+                               "zone": zone, "tone": tone}
+    return gauges
+
+
 def build(verbose: bool = False) -> dict:
     config.ensure_dirs()
     if verbose:
@@ -224,6 +292,13 @@ def build(verbose: bool = False) -> dict:
     valuation = valuation_mod.build_valuation()
     watchlist = watchlist_mod.build_watchlist()
 
+    # Sentiment & valuation gauges — read the way DG/MM do.
+    gauges = _build_gauges(metrics_by_key, cape)
+    if gauges.get("erp"):
+        gauges["erp"]["explain"] = explanations.VARIABLE.get("erp")
+    if gauges.get("vix"):
+        gauges["vix"]["explain"] = explanations.VARIABLE.get("vix")
+
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
     fred_series = [
@@ -275,6 +350,7 @@ def build(verbose: bool = False) -> dict:
         "semis": semis,
         "valuation": valuation,
         "watchlist": watchlist,
+        "gauges": gauges,
         "sections": sections,
         "curve": curve,
         "cape": cape,

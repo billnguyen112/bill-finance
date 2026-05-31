@@ -105,6 +105,7 @@ SERIES = [
     ("core_pce",      "PCEPILFE",           "Core PCE",            "inflation",   "index_yoy", "% y/y","down"),
     ("ppi",           "PPIFIS",             "PPI (Final Demand)",  "inflation",   "index_yoy", "% y/y","down"),
     ("breakeven_10y", "T10YIE",             "10Y Breakeven",       "inflation",   "rate",      "%",    "down"),
+    ("infl_exp_1y",   "MICH",               "Inflation Expectations (1y)", "inflation", "rate", "%",   "down"),
 
     ("ig_oas",        "BAMLC0A0CM",         "IG OAS",              "credit",      "spread",    "%",    "down"),
     ("hy_oas",        "BAMLH0A0HYM2",       "HY OAS",              "credit",      "spread",    "%",    "down"),

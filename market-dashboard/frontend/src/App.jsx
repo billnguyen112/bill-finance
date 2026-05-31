@@ -10,6 +10,7 @@ import ValuationView from "./components/ValuationView.jsx";
 import SourcesView from "./components/SourcesView.jsx";
 import FedView from "./components/FedView.jsx";
 import WatchlistCard from "./components/WatchlistCard.jsx";
+import GaugesCard from "./components/GaugesCard.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -93,8 +94,8 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <h1>Market Monitor</h1>
-          <span className="sub">A weekly macro read, built from raw data — rates · inflation · credit · equities · housing · labor · commodities</span>
+          <h1>Macro Desk</h1>
+          <span className="sub">My weekly macro read — raw data, interpreted through Meldrum's &amp; Defiant's playbooks</span>
         </div>
         <div className="controls">
           <button className="btn ghost" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -199,6 +200,8 @@ export default function App() {
       )}
 
       <WatchlistCard watchlist={snap?.watchlist} />
+
+      <GaugesCard gauges={snap?.gauges} />
 
       {snap?.sections?.map((sec) => <SectionCard key={sec.key} sec={sec} />)}
       </>)}

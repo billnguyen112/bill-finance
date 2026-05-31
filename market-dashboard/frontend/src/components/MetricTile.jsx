@@ -52,6 +52,7 @@ export default function MetricTile({ m }) {
       </div>
       <Sparkline data={m.spark} color={sparkColor} w={170} h={32} />
       {sig && <div className="t-note">{sig.note}</div>}
+      {m.explain?.lens && <div className="t-lens">{m.explain.lens}</div>}
       <div className="t-asof">
         as of {fmtDate(m.latest?.date)}
         {m.source_url && <> · <a href={m.source_url} target="_blank" rel="noreferrer" className="src-link">source ↗</a></>}
