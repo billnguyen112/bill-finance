@@ -12,7 +12,7 @@ import FedView from "./components/FedView.jsx";
 import WatchlistCard from "./components/WatchlistCard.jsx";
 import GaugesCard from "./components/GaugesCard.jsx";
 import MarginDebtCard from "./components/MarginDebtCard.jsx";
-import SinceLastRefresh from "./components/SinceLastRefresh.jsx";
+import MacroOutlook from "./components/MacroOutlook.jsx";
 
 function SectionCard({ sec }) {
   const [open, setOpen] = useState(false);
@@ -26,7 +26,9 @@ function SectionCard({ sec }) {
         )}
       </div>
       {open && sec.explain && <p className="section-explain">{sec.explain}</p>}
-      {sec.summary && <p className="section-summary">{sec.summary}</p>}
+      {sec.analysis
+        ? <p className="section-analysis">{sec.analysis}</p>
+        : sec.summary && <p className="section-summary">{sec.summary}</p>}
       <div className="tiles">
         {sec.metrics.map((m) => <MetricTile key={m.key} m={m} />)}
       </div>
@@ -154,7 +156,7 @@ export default function App() {
       )}
 
       {view === "dashboard" && (<>
-      <SinceLastRefresh data={snap?.since_last_refresh} />
+      <MacroOutlook macro={snap?.macro} />
       {overall && (
         <section className="hero card">
           <div className="hero-main">
@@ -199,6 +201,7 @@ export default function App() {
         <section className="card curve-card">
           <h3>Treasury yield curve</h3>
           <CurveChart curve={snap.curve} />
+          {snap?.curve_analysis && <p className="section-analysis">{snap.curve_analysis}</p>}
         </section>
       )}
 

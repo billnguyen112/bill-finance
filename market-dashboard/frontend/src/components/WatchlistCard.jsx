@@ -39,6 +39,7 @@ export default function WatchlistCard({ watchlist }) {
           </tbody>
         </table>
       </div>
+      {watchlist.analysis && <p className="section-analysis">{watchlist.analysis}</p>}
     </section>
   );
 }

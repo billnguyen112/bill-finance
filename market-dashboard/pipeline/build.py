@@ -121,10 +121,10 @@ def _disp(m: dict | None):
     return f"{h:g}{u}"
 
 
-def _build_since(prev: dict, metrics_by_key: dict, gauges: dict, overall: dict,
-                 playbook: dict, margin_debt, cape) -> dict:
-    """Diff key readings vs the previous snapshot, then have Claude (or, absent a
-    key, a rule-based fallback) analyse what moved through my rule set."""
+def _compute_changes(prev: dict, metrics_by_key: dict, gauges: dict, overall: dict,
+                     playbook: dict, margin_debt, cape) -> list[str]:
+    """Diff key readings vs the previously published snapshot → human-readable
+    'what moved since last refresh' lines."""
     prev = prev or {}
     prev_m = {m["key"]: m for sec in prev.get("sections", []) for m in sec.get("metrics", [])}
     changes = []
@@ -162,22 +162,60 @@ def _build_since(prev: dict, metrics_by_key: dict, gauges: dict, overall: dict,
     pmd = (prev.get("margin_debt") or {}).get("signal", {}).get("label")
     if margin_debt and pmd and margin_debt["signal"]["label"] != pmd:
         changes.append(f"Margin debt: {pmd} → {margin_debt['signal']['label']}")
+    return changes
 
-    levels = {metrics_by_key[k]["label"]: _disp(metrics_by_key[k])
-              for k in _SINCE_KEYS if (metrics_by_key.get(k) or {}).get("status") == "ok"}
-    payload = {"changes": changes, "levels": levels, "posture": playbook.get("posture")}
-    analysis = llm_mod.analyze_changes(payload)
-    if not analysis:
-        analysis = ({"headline": f"{len(changes)} change(s) since the last refresh — posture '{playbook.get('posture')}'.",
-                     "bullets": changes[:6], "source": "rules"} if changes else
-                    {"headline": "No material changes since the last refresh.", "bullets": [], "source": "rules"})
+
+def _metric_brief(m: dict) -> dict:
+    d = {"name": m.get("label"), "value": _disp(m)}
+    ch = m.get("changes", {})
+    for h, k in (("1w", "wk"), ("1m", "mo"), ("1y", "yr")):
+        c = ch.get(h)
+        if c and c.get("abs") is not None:
+            d[k] = round(c["abs"], 2)
+    sig = m.get("signal")
+    if sig:
+        d["read"] = sig.get("label")
+    return d
+
+
+def _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes) -> dict:
+    """Compact view of the whole dashboard for the analysis call."""
+    secs = {}
+    for sec in sections:
+        mets = [_metric_brief(m) for m in sec["metrics"] if m.get("status") == "ok"]
+        if mets:
+            secs[sec["key"]] = {"label": sec["label"], "metrics": mets}
+    if curve:
+        secs["curve"] = {"label": "Treasury yield curve",
+                         "points": [{"t": c["tenor"], "y": c["value"]} for c in curve]}
+    if watchlist and watchlist.get("items"):
+        secs["etfs"] = {"label": "Key ETFs", "rows": [
+            {"sym": e.get("symbol"), "role": e.get("role"), "wk": e.get("w1"),
+             "mo": e.get("m1"), "yr": e.get("y1"), "from_high": e.get("pct_from_high")}
+            for e in watchlist["items"]]}
+    gz = {}
+    for k in ("vix", "erp", "mfg_pulse"):
+        gv = (gauges or {}).get(k)
+        if gv:
+            gz[k] = {kk: gv[kk] for kk in ("value", "zone", "spread", "label", "avg") if kk in gv}
     return {
-        "prev_generated_at": prev.get("generated_at"),
-        "changes": changes,
-        "headline": analysis.get("headline"),
-        "bullets": analysis.get("bullets", []),
-        "source": analysis.get("source", "rules"),
+        "overall": {"score": overall.get("score"), "label": overall.get("label")},
+        "posture": playbook.get("posture"),
+        "gauges": gz,
+        "sections": secs,
+        "changes_since_last_refresh": changes,
     }
+
+
+def _fallback_outlook(overall: dict, playbook: dict) -> str:
+    sup = (overall.get("supports") or [])[:2]
+    con = (overall.get("concerns") or [])[:2]
+    bits = [f"Overall read is {overall.get('label')} ({overall.get('score'):+.2f}); playbook posture '{playbook.get('posture')}'."]
+    if sup:
+        bits.append("Supports: " + "; ".join(sup))
+    if con:
+        bits.append("Concerns: " + "; ".join(con))
+    return " ".join(bits)
 
 
 def _build_gauges(metrics_by_key: dict, cape) -> dict:
@@ -420,7 +458,6 @@ def build(verbose: bool = False) -> dict:
     if semis:
         chips = [c for c in semis["companies"] if c.get("group") in semis_mod.CHIP_GROUPS]
         extras["semis_pe"] = [c["fwd_pe"] for c in chips if c.get("fwd_pe")]
-        extras["semis_rev"] = [c["rev_yoy"] for c in chips if c.get("rev_yoy") is not None]
         # Large-cap semiconductor earnings miss = sell trigger.
         misses = []
         for c in semis["companies"]:
@@ -457,9 +494,27 @@ def build(verbose: bool = False) -> dict:
     if gauges.get("vix"):
         gauges["vix"]["explain"] = explanations.VARIABLE.get("vix")
 
-    # "Since last refresh" — diff vs the previous snapshot + my analysis of it.
-    since_last_refresh = _build_since(_load_prev_snapshot(), metrics_by_key, gauges,
-                                      overall, playbook, margin_debt, cape)
+    # Whole-dashboard analysis: per-section + curve + ETFs + a regime outlook,
+    # plus the rule-based "what moved since last refresh" diff. One Claude call
+    # (falls back to rule summaries without a key).
+    prev_snap = _load_prev_snapshot()
+    changes = _compute_changes(prev_snap, metrics_by_key, gauges, overall, playbook, margin_debt, cape)
+    macro_ai = llm_mod.analyze_macro(
+        _macro_payload(sections, gauges, curve, watchlist, overall, playbook, changes))
+    ai_sections = (macro_ai or {}).get("sections", {})
+    for sec in sections:
+        if ai_sections.get(sec["key"]):
+            sec["analysis"] = ai_sections[sec["key"]]
+    curve_analysis = ai_sections.get("curve")
+    if watchlist and ai_sections.get("etfs"):
+        watchlist["analysis"] = ai_sections["etfs"]
+    macro = {
+        "regime": (macro_ai or {}).get("regime"),
+        "outlook": (macro_ai or {}).get("outlook") or _fallback_outlook(overall, playbook),
+        "changes": changes,
+        "prev_generated_at": prev_snap.get("generated_at"),
+        "source": (macro_ai or {}).get("source", "rules"),
+    }
 
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
@@ -505,7 +560,8 @@ def build(verbose: bool = False) -> dict:
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
         "generated_at": now,
-        "since_last_refresh": since_last_refresh,
+        "macro": macro,
+        "curve_analysis": curve_analysis,
         "overall": overall,
         "playbook": playbook,
         "fed": fed_read,

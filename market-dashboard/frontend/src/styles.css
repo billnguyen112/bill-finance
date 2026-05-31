@@ -132,6 +132,12 @@ body {
 
 /* Sections */
 .section-summary { color: #c7cdd8; font-size: 13.5px; margin: 0 0 14px; }
+.section-analysis {
+  color: var(--text); font-size: 13.5px; line-height: 1.55; margin: 2px 0 14px;
+  padding: 9px 12px; background: var(--card-2); border-left: 3px solid var(--accent);
+  border-radius: 0 7px 7px 0;
+}
+:root[data-theme="light"] .section-analysis { background: #faf4e6; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
 
 .tile {

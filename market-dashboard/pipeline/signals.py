@@ -95,26 +95,16 @@ def _leaders_earnings(metrics, cape, ex):
     return _auto(g > 0, f"Leading sectors' bellwether revenue {g:+.1f}% YoY")
 
 
-def _semis_plateau(metrics, cape, ex):
-    growths = (ex or {}).get("semis_rev")
-    if not growths:
-        return _pending("Awaiting FMP data (semis earnings)")
-    med = _median(growths)
-    plateau = med is not None and med < config.PLATEAU_REV_GROWTH
-    return _auto(plateau, f"Semis median revenue {med:+.1f}% YoY — "
-                          f"{'plateauing' if plateau else 'still growing'}")
-
-
 def _semi_miss(metrics, cape, ex):
     """Sell trigger: a megacap semiconductor missed its last earnings."""
     misses = (ex or {}).get("semi_miss")
     if misses is None:
         return _pending("Awaiting FMP data (semi earnings)")
     if misses:
-        names = ", ".join(m["symbol"] for m in misses[:4])
-        return _auto(True, f"{names} missed last earnings (EPS/revenue below estimate) — "
-                           "a large-cap semi miss is a distribution warning.")
-    return _auto(False, "No large-cap semiconductor missed last quarter's earnings.")
+        parts = [f"{m['symbol']} (missed {'EPS' if m.get('eps_miss') else 'revenue'})" for m in misses[:5]]
+        return _auto(True, f"{'; '.join(parts)} — a semi missing is the real plateau signal, "
+                           "since so much growth is already priced in.")
+    return _auto(False, "No tracked semiconductor (≥ $20B) missed last quarter's earnings.")
 
 
 def _fed_pivot(metrics, cape, ex):
@@ -155,10 +145,8 @@ BUY_SPECS = [
      "Leading sectors' bellwether revenue YoY > 0", ("Sector performance", _SECTORS), _leaders_earnings),
 ]
 SELL_SPECS = [
-    ("Large-cap semi earnings miss", "A megacap semiconductor missed its last earnings (EPS or revenue below estimate).",
+    ("Large-cap semi earnings miss", "A semiconductor missed its last earnings (EPS or revenue below estimate) — with so much growth priced in, a miss is the real plateau signal.",
      f"Any semi ≥ ${config.SEMI_MEGACAP_MCAP/1e9:.0f}B market cap misses EPS/revenue", ("Semis (SMH)", _SMH), _semi_miss),
-    ("Tech/semi earnings plateau", "Semiconductor revenue growth is plateauing.",
-     f"Semis median revenue YoY < {config.PLATEAU_REV_GROWTH:.0f}%", ("Semis (SMH)", _SMH), _semis_plateau),
     ("Fed pivots to hiking", "Market-implied rates (3M T-bill vs fed funds, FOMC calendar) signal a pivot from cutting back to hiking.",
      "3M T-bill − fed funds ≥ +10bp (hike priced)", ("FRED: DGS3MO", _FRED + "DGS3MO"), _fed_pivot),
     ("Crazy tech/semi valuation", "Semiconductor valuations are extreme.",

@@ -52,10 +52,8 @@ SECTOR_BELLWETHERS = {
 }
 # A semis basket trailing P/E above this reads as "crazy" valuation.
 VALUATION_PE_EXTREME = float(os.environ.get("VALUATION_PE_EXTREME", "60"))
-# Median semis YoY revenue growth below this reads as an earnings "plateau".
-PLATEAU_REV_GROWTH = float(os.environ.get("PLATEAU_REV_GROWTH", "5"))
 # A semiconductor at/above this market cap missing earnings is a sell trigger.
-SEMI_MEGACAP_MCAP = float(os.environ.get("SEMI_MEGACAP_MCAP", "200")) * 1e9
+SEMI_MEGACAP_MCAP = float(os.environ.get("SEMI_MEGACAP_MCAP", "20")) * 1e9
 
 # --- Claude API (the "since last refresh" analysis box) --------------------
 # When set, the dashboard runs one quick call per refresh to analyse what

@@ -1,27 +1,21 @@
 import React, { useState } from "react";
 import { fmtDateTime } from "../format.js";
 
-export default function SinceLastRefresh({ data }) {
+export default function MacroOutlook({ macro }) {
   const [open, setOpen] = useState(false);
-  if (!data) return null;
-  const { headline, bullets = [], changes = [], source, prev_generated_at } = data;
-  const hasMoves = changes.length > 0;
+  if (!macro) return null;
+  const { regime, outlook, changes = [], source, prev_generated_at } = macro;
   return (
     <section className="card since-card">
       <div className="since-head">
-        <span className="hero-eyebrow">Since last refresh</span>
+        <span className="hero-eyebrow">Macro outlook{regime ? ` — ${regime}` : ""}</span>
         <span className="since-tag">{source === "llm" ? "AI read" : "auto read"}</span>
       </div>
-      {headline && <p className="since-headline">{headline}</p>}
-      {bullets.length > 0 && (
-        <ul className="since-bullets">
-          {bullets.map((b, i) => <li key={i}>{b}</li>)}
-        </ul>
-      )}
-      {hasMoves && (
+      {outlook && <p className="since-headline">{outlook}</p>}
+      {changes.length > 0 && (
         <div className="since-foot">
           <button className="since-toggle" onClick={() => setOpen((o) => !o)}>
-            {open ? "▾" : "▸"} {changes.length} data move{changes.length === 1 ? "" : "s"}
+            {open ? "▾" : "▸"} {changes.length} data move{changes.length === 1 ? "" : "s"} since last refresh
           </button>
           {open && (
             <ul className="since-changes">
@@ -31,7 +25,7 @@ export default function SinceLastRefresh({ data }) {
         </div>
       )}
       {prev_generated_at && (
-        <div className="since-asof">vs refresh of {fmtDateTime(prev_generated_at)}</div>
+        <div className="since-asof">compared with refresh of {fmtDateTime(prev_generated_at)}</div>
       )}
     </section>
   );
