@@ -223,45 +223,6 @@ def fmp_sectors() -> list[dict] | None:
     return None
 
 
-def supadata_transcript(video_id: str) -> str | None:
-    """Full transcript text via Supadata (server-side fetch, no IP block)."""
-    if not config.SUPADATA_API_KEY:
-        return None
-    url = ("https://api.supadata.ai/v1/youtube/transcript"
-           f"?url=https://www.youtube.com/watch?v={video_id}&text=true")
-    try:
-        data = json.loads(_get(url, retries=2, headers={"x-api-key": config.SUPADATA_API_KEY}))
-    except Exception:
-        return None
-    content = data.get("content") if isinstance(data, dict) else None
-    return content if isinstance(content, str) and content.strip() else None
-
-
-def channel_videos(channel_id: str, limit: int = 15) -> list[dict]:
-    """Recent uploads from a channel RSS feed: [{video_id, title, published}]."""
-    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-    try:
-        raw = _get(url, retries=2)
-    except Exception:
-        return []
-    import xml.etree.ElementTree as ET
-    ns = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
-    out = []
-    try:
-        root = ET.fromstring(raw)
-    except ET.ParseError:
-        return []
-    for e in root.findall("a:entry", ns):
-        vid = e.findtext("yt:videoId", default="", namespaces=ns)
-        title = (e.findtext("a:title", default="", namespaces=ns) or "").strip()
-        pub = (e.findtext("a:published", default="", namespaces=ns) or "")[:10]
-        if vid:
-            out.append({"video_id": vid, "title": title, "published": pub})
-        if len(out) >= limit:
-            break
-    return out
-
-
 def shiller_cape() -> float | None:
     """Best-effort scrape of the current Shiller CAPE (CAPE/PE10) ratio."""
     try:

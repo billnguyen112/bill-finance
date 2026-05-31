@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { getSnapshot, getHistory, getArchive, refresh, probeBackend, actionsUrl } from "./api.js";
+import { getSnapshot, getHistory, refresh, probeBackend, actionsUrl } from "./api.js";
 import { scoreColor, fmtDateTime, num } from "./format.js";
 import MetricTile from "./components/MetricTile.jsx";
 import CurveChart from "./components/CurveChart.jsx";
@@ -9,8 +9,6 @@ import SemisView from "./components/SemisView.jsx";
 import ValuationView from "./components/ValuationView.jsx";
 import SourcesView from "./components/SourcesView.jsx";
 import FedView from "./components/FedView.jsx";
-import ViewsView from "./components/ViewsView.jsx";
-import ArchiveView from "./components/ArchiveView.jsx";
 import WatchlistCard from "./components/WatchlistCard.jsx";
 
 function SectionCard({ sec }) {
@@ -48,7 +46,6 @@ function Gauge({ score }) {
 export default function App() {
   const [snap, setSnap] = useState(null);
   const [history, setHistory] = useState(null);
-  const [archive, setArchive] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
@@ -65,10 +62,9 @@ export default function App() {
 
   const load = useCallback(async () => {
     try {
-      const [s, h, a] = await Promise.all([getSnapshot(), getHistory(), getArchive().catch(() => null)]);
+      const [s, h] = await Promise.all([getSnapshot(), getHistory()]);
       setSnap(s);
       setHistory(h);
-      setArchive(a);
       setError(null);
     } catch (e) {
       setSnap(null);
@@ -143,10 +139,6 @@ export default function App() {
                   onClick={() => setView("dashboard")}>Dashboard</button>
           <button className={"tab" + (view === "signals" ? " active" : "")}
                   onClick={() => setView("signals")}>Signals</button>
-          <button className={"tab" + (view === "views" ? " active" : "")}
-                  onClick={() => setView("views")}>Their Views</button>
-          <button className={"tab" + (view === "archive" ? " active" : "")}
-                  onClick={() => setView("archive")}>Archive</button>
           <button className={"tab" + (view === "fed" ? " active" : "")}
                   onClick={() => setView("fed")}>Fed Watch</button>
           <button className={"tab" + (view === "semis" ? " active" : "")}
@@ -212,10 +204,6 @@ export default function App() {
       </>)}
 
       {view === "signals" && <SignalsView playbook={snap?.playbook} />}
-
-      {view === "views" && <ViewsView views={snap?.views} archive={archive} sections={snap?.sections} />}
-
-      {view === "archive" && <ArchiveView archive={archive} />}
 
       {view === "fed" && <FedView fed={snap?.fed} />}
 

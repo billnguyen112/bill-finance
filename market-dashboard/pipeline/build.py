@@ -19,23 +19,12 @@ import signals as signals_mod
 import semis as semis_mod
 import valuation as valuation_mod
 import fed as fed_mod
-import views as views_mod
 import watchlist as watchlist_mod
 
 
 def _meta(row) -> dict:
     keys = ["key", "fred_id", "label", "section", "kind", "unit", "better"]
     return dict(zip(keys, row))
-
-
-def _load_prev_archive() -> dict:
-    """Previously published transcript archive (downloaded by the workflow),
-    indexed by video_id so already-digested videos aren't re-fetched."""
-    try:
-        data = json.loads((config.DATA_DIR / "prev_archive.json").read_text())
-        return {v["video_id"]: v for v in data.get("videos", [])}
-    except (OSError, json.JSONDecodeError, KeyError):
-        return {}
 
 
 def _fetch(fid: str):
@@ -235,15 +224,6 @@ def build(verbose: bool = False) -> dict:
     valuation = valuation_mod.build_valuation()
     watchlist = watchlist_mod.build_watchlist()
 
-    # "Their Views" + 3-month Archive — transcript digests of the tracked
-    # channels' market updates. The archive is carried forward so each video's
-    # transcript is fetched only once (immutable content; limited free quota).
-    prev_arch = _load_prev_archive()
-    archive = views_mod.build_archive(prev_arch)
-    if archive:
-        (config.DATA_DIR / "archive.json").write_text(json.dumps(archive, indent=2))
-    views = views_mod.latest_per_channel(archive)
-
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
     fred_series = [
@@ -291,7 +271,6 @@ def build(verbose: bool = False) -> dict:
         "overall": overall,
         "playbook": playbook,
         "fed": fed_read,
-        "views": views,
         "sources": sources_block,
         "semis": semis,
         "valuation": valuation,
