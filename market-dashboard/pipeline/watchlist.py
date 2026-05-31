@@ -37,7 +37,7 @@ def _one(item) -> dict:
         "symbol": sym, "role": role,
         "price": _r(price, 2),
         "pct_from_high": _r((price / yh - 1) * 100) if price and yh else None,
-        "m1": _r(pc.get("1M")), "m3": _r(pc.get("3M")), "y1": _r(pc.get("1Y")),
+        "w1": _r(pc.get("5D")), "m1": _r(pc.get("1M")), "y1": _r(pc.get("1Y")),
     }
 
 

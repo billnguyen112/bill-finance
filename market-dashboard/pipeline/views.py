@@ -7,9 +7,44 @@ named, and a map onto our own tracker sections. No LLM.
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 import config
 import sources
+
+# Bump when the digest logic changes so carried-over videos get re-digested.
+DIGEST_VERSION = 2
+
+_FILLER = re.compile(r"\b(uh+|um+|uhm+|erm+|hmm+|mm+|you know|i mean|kind of|sort of|right\?)\b", re.I)
+# Phrases that mark a conclusion / his actual view (vs. just naming a topic).
+_INSIGHT = [
+    "i think", "i expect", "i believe", "my view", "the key", "the point", "the takeaway",
+    "bottom line", "what this means", "this means", "this tells", "tells us", "suggests",
+    "the issue", "the problem", "the concern", "the risk", "watch for", "watch out",
+    "important", "expect", "likely", "should", "bullish", "bearish", "matters", "the reason",
+    "because", "so what", "which is why", "the bottom line", "going to", "will be",
+]
+
+
+def _clean(text: str) -> str:
+    t = _FILLER.sub(" ", text)
+    t = re.sub(r"\b(\w+)(\s+\1\b)+", r"\1", t, flags=re.I)   # collapse stutters ("the the")
+    t = re.sub(r"\s+([,.;:!?])", r"\1", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _score(s: str) -> int:
+    sl = s.lower()
+    n = len(s.split())
+    score = 0
+    if re.search(r"\d", s):                       # data points
+        score += 2
+    score += sum(1 for k in _INSIGHT if k in sl)  # his view / conclusions
+    if 9 <= n <= 42:
+        score += 1
+    if n < 7 or n > 55:
+        score -= 2
+    return score
 
 # theme label, keywords, the dashboard section it maps onto (or None)
 THEMES = [
@@ -47,20 +82,35 @@ def _trim_spotlight(text: str) -> str:
     return text[:best].rstrip() if best else text
 
 
+def _top(sentences, n=2):
+    """Highest-insight, de-duplicated sentences."""
+    out = []
+    for s in sorted(sentences, key=_score, reverse=True):
+        if len(out) >= n:
+            break
+        if _score(s) <= 0:
+            continue
+        if any(s[:45].lower() == p[:45].lower() for p in out):
+            continue
+        out.append(s.strip()[:240])
+    return out
+
+
 def _digest(text: str) -> dict:
-    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    text = _clean(text)
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if len(s.split()) >= 6]
     themes = []
     for label, kws, section in THEMES:
         hits = [s for s in sentences if any(k in s.lower() for k in kws)]
         if not hits:
             continue
-        data = [s for s in hits if re.search(r"\d", s)]
-        points = [s[:280] for s in (data[:3] or hits[:2])]
+        points = _top(hits, 2) or [max(hits, key=_score).strip()[:240]]
         themes.append({"theme": label, "section": section, "points": points, "mentions": len(hits)})
     themes.sort(key=lambda t: -t["mentions"])
-    tickers = sorted({t for t in _TICKER.findall(text) if t not in _STOP})
-    tldr = " ".join(sentences[:2])[:320]
-    return {"themes": themes, "tickers": tickers[:25], "tldr": tldr}
+    cnt = Counter(t for t in _TICKER.findall(text) if t not in _STOP)
+    tickers = [t for t, c in cnt.most_common() if c >= 2][:18]
+    tldr = " ".join(_top(sentences, 2)) if sentences else ""
+    return {"themes": themes, "tickers": tickers, "tldr": tldr[:320]}
 
 
 def _channel_item(ch: dict) -> dict | None:
@@ -95,7 +145,7 @@ def _digest_video(ch: dict, v: dict) -> dict | None:
     return {
         "video_id": v["video_id"], "channel": ch["name"], "title": v["title"],
         "url": f"https://www.youtube.com/watch?v={v['video_id']}", "date": v["published"],
-        "word_count": len(text.split()), **_digest(text),
+        "word_count": len(text.split()), "dv": DIGEST_VERSION, **_digest(text),
     }
 
 
@@ -113,8 +163,9 @@ def build_archive(prev_by_id: dict | None = None, days: int = 95) -> dict | None
         for v in sources.channel_videos(ch["channel_id"], limit=30):
             if not v["published"] or v["published"] < cutoff or not _is_update(v["title"]):
                 continue
-            if v["video_id"] in prev_by_id:
-                videos.append(prev_by_id[v["video_id"]])
+            cached = prev_by_id.get(v["video_id"])
+            if cached and cached.get("dv") == DIGEST_VERSION:
+                videos.append(cached)
                 continue
             try:
                 d = _digest_video(ch, v)

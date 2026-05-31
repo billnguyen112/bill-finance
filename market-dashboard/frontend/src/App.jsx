@@ -213,7 +213,7 @@ export default function App() {
 
       {view === "signals" && <SignalsView playbook={snap?.playbook} />}
 
-      {view === "views" && <ViewsView views={snap?.views} sections={snap?.sections} />}
+      {view === "views" && <ViewsView views={snap?.views} archive={archive} sections={snap?.sections} />}
 
       {view === "archive" && <ArchiveView archive={archive} />}
 

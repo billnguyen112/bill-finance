@@ -28,19 +28,23 @@ def build(fed_funds: float | None, t3m: float | None, today_iso: str) -> dict | 
         return None
     implied = round(t3m - fed_funds, 2)         # percentage points
     bp = round(implied * 100)                    # basis points
-    odds = min(100, round(abs(implied) / 0.25 * 100))  # rough % of a 25bp move priced
+    # Continuous implied odds of a 25bp move (FedWatch-style), then the stance
+    # (signal trigger) uses a ±10bp threshold.
+    move_odds = min(100, round(abs(implied) / 0.25 * 100))
+    hike_odds = move_odds if implied > 0 else 0
+    cut_odds = move_odds if implied < 0 else 0
+    hold_odds = max(0, 100 - hike_odds - cut_odds)
     if implied >= 0.10:
-        stance, lean = "hike", f"market leaning toward a HIKE (~{odds}% of a 25bp move priced in)"
+        stance, lean = "hike", f"market leaning toward a HIKE (~{hike_odds}% of a 25bp hike priced into the next meeting)"
     elif implied <= -0.10:
-        stance, lean = "cut", f"market pricing CUTS (~{odds}% of a 25bp move priced in)"
+        stance, lean = "cut", f"market pricing CUTS (~{cut_odds}% of a 25bp cut priced into the next meeting)"
     else:
-        stance, lean = "hold", "market pricing roughly on-hold"
+        stance, lean = "hold", f"market roughly on-hold (hold ~{hold_odds}%, hike ~{hike_odds}%, cut ~{cut_odds}%)"
     nf = next_fomc(today_iso)
     reading = (f"3M T-bill {t3m:.2f}% vs fed funds {fed_funds:.2f}% ({bp:+d}bp) — {lean}"
                + (f" · next FOMC {nf}" if nf else ""))
     return {
         "stance": stance, "implied_bp": bp,
-        "hike_odds": odds if stance == "hike" else 0,
-        "cut_odds": odds if stance == "cut" else 0,
+        "hike_odds": hike_odds, "cut_odds": cut_odds, "hold_odds": hold_odds,
         "next_fomc": nf, "t3m": t3m, "fed_funds": fed_funds, "reading": reading,
     }

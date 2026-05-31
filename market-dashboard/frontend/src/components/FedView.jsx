@@ -25,9 +25,23 @@ export default function FedView({ fed }) {
         <span className="hero-eyebrow">Fed watch — market-implied policy path (is a pivot coming?)</span>
         <div className="fed-head">
           <span className="fed-stance" style={{ color: s.color }}>{s.label}</span>
-          {odds > 0 && <span className="fed-odds">~{odds}% of a 25bp move priced</span>}
           {fed.next_fomc && <span className="fed-fomc">Next FOMC <b>{fed.next_fomc}</b></span>}
         </div>
+
+        <div className="fed-prob-label muted">
+          Implied for the next meeting (25bp move) — 3-month T-bill proxy; CME FedWatch uses fed funds futures (ZQ):
+        </div>
+        <div className="fed-prob">
+          <div className="fp cut" style={{ width: `${fed.cut_odds || 0}%` }} />
+          <div className="fp hold" style={{ width: `${fed.hold_odds ?? 100}%` }} />
+          <div className="fp hike" style={{ width: `${fed.hike_odds || 0}%` }} />
+        </div>
+        <div className="fed-prob-legend">
+          <span><i className="dot cut" /> Cut {fed.cut_odds || 0}%</span>
+          <span><i className="dot hold" /> Hold {fed.hold_odds ?? 100}%</span>
+          <span><i className="dot hike" /> Hike {fed.hike_odds || 0}%</span>
+        </div>
+
         <p className="fed-reading">{fed.reading}</p>
       </section>
 

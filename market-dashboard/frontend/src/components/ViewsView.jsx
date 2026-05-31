@@ -1,6 +1,17 @@
 import React from "react";
 
-export default function ViewsView({ views, sections }) {
+function latestPerChannel(archive) {
+  if (!archive || !(archive.videos || []).length) return null;
+  const seen = new Set(), items = [];
+  for (const v of archive.videos) {
+    if (!seen.has(v.channel)) { seen.add(v.channel); items.push(v); }
+  }
+  return { items };
+}
+
+export default function ViewsView({ views, archive, sections }) {
+  // Fall back to the archive's latest-per-channel if the snapshot has no views.
+  if (!views || !(views.items || []).length) views = latestPerChannel(archive);
   if (!views || !(views.items || []).length) {
     return (
       <div className="banner info">
