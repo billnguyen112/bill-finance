@@ -56,39 +56,48 @@ export default function SemisView({ semis }) {
         </div>
       )}
 
-      <section className="card">
-        <div className="semis-table-wrap">
-          <table className="semis-table">
-            <thead>
-              <tr>
-                <th className="l">Company</th><th>Price</th><th>% from high</th>
-                <th>1M</th><th>1Y</th><th>Fwd P/E</th><th>Rev y/y</th><th>Next earnings</th>
-              </tr>
-            </thead>
-            <tbody>
-              {s.companies.map((c) => (
-                <tr key={c.symbol}>
-                  <td className="l">
-                    <span className="sym">{c.symbol}</span>
-                    <span className="cname">{c.name} · {c.group}</span>
-                  </td>
-                  <td>{c.price != null ? `$${num(c.price, 2)}` : "—"} <span className="mc">{mcap(c.market_cap)}</span></td>
-                  <td>{signed(c.pct_from_high)}</td>
-                  <td>{signed(c.m1)}</td>
-                  <td>{signed(c.y1)}</td>
-                  <td>{c.fwd_pe != null ? num(c.fwd_pe, 1) : <span className="muted">—</span>}</td>
-                  <td>{signed(c.rev_yoy)}</td>
-                  <td className="ne">{c.next_earnings ? fmtDate(c.next_earnings) : <span className="muted">—</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {(s.group_order || []).map((g) => {
+        const rows = s.companies.filter((c) => c.group === g);
+        if (!rows.length) return null;
+        return (
+          <section className="card" key={g}>
+            <h3 className="val-h">{g} <span className="cnt">{rows.length} names</span></h3>
+            <div className="semis-table-wrap">
+              <table className="semis-table">
+                <thead>
+                  <tr>
+                    <th className="l">Company</th><th>Price</th><th>% from high</th>
+                    <th>1M</th><th>1Y</th><th>Fwd P/E</th><th>FY28 P/E</th><th>Rev y/y</th><th>Next earnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((c) => (
+                    <tr key={c.symbol}>
+                      <td className="l">
+                        <span className="sym">{c.symbol}</span>
+                        <span className="cname">{c.name}</span>
+                      </td>
+                      <td>{c.price != null ? `$${num(c.price, 2)}` : "—"} <span className="mc">{mcap(c.market_cap)}</span></td>
+                      <td>{signed(c.pct_from_high)}</td>
+                      <td>{signed(c.m1)}</td>
+                      <td>{signed(c.y1)}</td>
+                      <td>{c.fwd_pe != null ? num(c.fwd_pe, 1) : <span className="muted">—</span>}</td>
+                      <td>{c.fwd_pe_2028 != null ? num(c.fwd_pe_2028, 1) : <span className="muted">—</span>}</td>
+                      <td>{signed(c.rev_yoy)}</td>
+                      <td className="ne">{c.next_earnings ? fmtDate(c.next_earnings) : <span className="muted">—</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      })}
 
       <p className="foot muted">
-        {s.count} names tracked · price/momentum, 52-week range, revenue growth, and earnings dates from
-        Financial Modeling Prep. Strength blends breadth, momentum, and revenue growth. Informational only.
+        {s.count} names across {(s.group_order || []).length} groups · price/momentum, 52-week range, fwd &amp;
+        FY28 P/E, revenue growth, and earnings dates from FMP. Strength blends breadth, momentum, and revenue
+        growth. Informational only.
       </p>
     </>
   );

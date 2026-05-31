@@ -1,7 +1,7 @@
 import React from "react";
 import { num } from "../format.js";
 
-const VAL_LABELS = [["Trailing P/E", "pe"], ["Forward P/E", "fwd_pe"], ["P/B", "pb"], ["P/S", "ps"], ["EV/EBITDA", "ev_ebitda"]];
+const VAL_LABELS = [["Trailing P/E", "pe"], ["Forward P/E", "fwd_pe"], ["P/E FY28", "fwd_pe_2028"], ["P/B", "pb"], ["P/S", "ps"], ["EV/EBITDA", "ev_ebitda"]];
 const QUAL_LABELS = [["Gross margin", "gross_margin", "%"], ["Op margin", "op_margin", "%"], ["FCF / Net income", "fcf_ni", "x"]];
 
 function val(v, unit) {
@@ -45,7 +45,7 @@ export default function ValuationView({ valuation }) {
             <table className="semis-table">
               <thead>
                 <tr>
-                  <th className="l">Company</th><th>P/E</th><th>Fwd P/E</th>
+                  <th className="l">Company</th><th>P/E</th><th>Fwd P/E</th><th>FY28 P/E</th>
                   <th>P/B</th><th>P/S</th><th>EV/EBITDA</th>
                   <th>Gross %</th><th>Op %</th><th>FCF/NI</th><th>SBC %OCF</th>
                 </tr>
@@ -57,7 +57,7 @@ export default function ValuationView({ valuation }) {
                       <span className="sym">{c.symbol}</span>
                       <span className="cname">{c.name}</span>
                     </td>
-                    <td>{val(c.pe)}</td><td>{val(c.fwd_pe)}</td>
+                    <td>{val(c.pe)}</td><td>{val(c.fwd_pe)}</td><td>{val(c.fwd_pe_2028)}</td>
                     <td>{val(c.pb)}</td><td>{val(c.ps)}</td><td>{val(c.ev_ebitda)}</td>
                     <td>{val(c.gross_margin, "%")}</td><td>{val(c.op_margin, "%")}</td>
                     <td className={c.fcf_ni != null && c.fcf_ni < 0.7 ? "neg" : ""}>{val(c.fcf_ni, "x")}</td>

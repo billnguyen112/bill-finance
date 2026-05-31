@@ -13,9 +13,10 @@ import config
 import sources
 
 # Bump when the digest logic changes so carried-over videos get re-digested.
-DIGEST_VERSION = 2
+DIGEST_VERSION = 3
 
-_FILLER = re.compile(r"\b(uh+|um+|uhm+|erm+|hmm+|mm+|you know|i mean|kind of|sort of|right\?)\b", re.I)
+_FILLER = re.compile(r"\b(uh+|um+|uhm+|erm+|hmm+|mm+|you know|i mean|kind of|sort of|right\?|okay so|so basically)\b", re.I)
+_LEAD = re.compile(r"^(and|so|but|now|well|okay|ok|yeah|yep|uh|um|right|look|see|i mean|you know)[\s,]+", re.I)
 # Phrases that mark a conclusion / his actual view (vs. just naming a topic).
 _INSIGHT = [
     "i think", "i expect", "i believe", "my view", "the key", "the point", "the takeaway",
@@ -27,10 +28,26 @@ _INSIGHT = [
 
 
 def _clean(text: str) -> str:
-    t = _FILLER.sub(" ", text)
+    t = re.sub(r"\[[^\]]*\]", " ", text)            # [music], [applause]
+    t = t.replace(">>", " ").replace("&gt;&gt;", " ")
+    t = _FILLER.sub(" ", t)
     t = re.sub(r"\b(\w+)(\s+\1\b)+", r"\1", t, flags=re.I)   # collapse stutters ("the the")
     t = re.sub(r"\s+([,.;:!?])", r"\1", t)
     return re.sub(r"\s+", " ", t).strip()
+
+
+def _polish(s: str) -> str:
+    """Tidy a single sentence into a presentable bullet."""
+    prev = None
+    while prev != s:                                 # strip leading filler/conjunctions
+        prev = s
+        s = _LEAD.sub("", s).strip()
+    s = re.sub(r"\s+", " ", s).strip(" ,;:-")
+    if s and s[0].islower():
+        s = s[0].upper() + s[1:]
+    if s and s[-1] not in ".!?":
+        s += "."
+    return s
 
 
 def _score(s: str) -> int:
@@ -83,16 +100,19 @@ def _trim_spotlight(text: str) -> str:
 
 
 def _top(sentences, n=2):
-    """Highest-insight, de-duplicated sentences."""
+    """Highest-insight, polished, de-duplicated sentences."""
     out = []
     for s in sorted(sentences, key=_score, reverse=True):
         if len(out) >= n:
             break
         if _score(s) <= 0:
             continue
-        if any(s[:45].lower() == p[:45].lower() for p in out):
+        p = _polish(s)[:260]
+        if len(p.split()) < 8:                       # drop fragments
             continue
-        out.append(s.strip()[:240])
+        if any(p[:45].lower() == q[:45].lower() for q in out):
+            continue
+        out.append(p)
     return out
 
 

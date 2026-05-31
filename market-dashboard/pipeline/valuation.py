@@ -30,7 +30,7 @@ UNIVERSE = [
     ("NFLX", "Netflix", "Big Tech"), ("CRM", "Salesforce", "Big Tech"),
     ("ADBE", "Adobe", "Big Tech"), ("PLTR", "Palantir", "Big Tech"),
 ]
-MULTIPLES = ("pe", "fwd_pe", "pb", "ps", "ev_ebitda")
+MULTIPLES = ("pe", "fwd_pe", "fwd_pe_2028", "pb", "ps", "ev_ebitda")
 MEDIAN_KEYS = MULTIPLES + ("gross_margin", "op_margin", "fcf_ni")
 
 
@@ -65,13 +65,16 @@ def _one(item) -> dict:
     fcf_ni = round(fcf / ni, 2) if isinstance(fcf, (int, float)) and ni else None
     sbc_ocf = round(sbc / ocf * 100, 1) if isinstance(sbc, (int, float)) and ocf else None
 
-    fwd_pe = None
+    fwd_pe = fwd_pe_2028 = None
     if isinstance(price, (int, float)) and est:
         future = sorted((e for e in est if e.get("date") and e["date"] >= date.today().isoformat()),
                         key=lambda e: e["date"])
         eps = (future[0] if future else {}).get("epsAvg")
         if isinstance(eps, (int, float)) and eps > 0:
             fwd_pe = round(price / eps, 1)
+        eps28 = next((e.get("epsAvg") for e in est if str(e.get("date", "")).startswith("2028")), None)
+        if isinstance(eps28, (int, float)) and eps28 > 0:
+            fwd_pe_2028 = round(price / eps28, 1)
 
     return {
         "symbol": sym, "name": name, "group": grp,
@@ -79,6 +82,7 @@ def _one(item) -> dict:
         "market_cap": q.get("marketCap"),
         "pe": _pos(r.get("priceToEarningsRatioTTM")),
         "fwd_pe": fwd_pe,
+        "fwd_pe_2028": fwd_pe_2028,
         "pb": _pos(r.get("priceToBookRatioTTM")),
         "ps": _pos(r.get("priceToSalesRatioTTM")),
         "ev_ebitda": _pos(km.get("evToEBITDATTM")),
