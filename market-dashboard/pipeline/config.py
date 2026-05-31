@@ -76,6 +76,13 @@ SPOTLIGHT_MARKERS = [
 ]
 SPOTLIGHT_MIN_FRACTION = 0.4
 
+# --- Optional LLM summarisation (Claude) ------------------------------------
+# When ANTHROPIC_API_KEY is set, each transcript is distilled into an MD-grade
+# brief (thesis, key points, data points, risks, positioning) by Claude. Absent
+# the key, the build falls back to the rule-based extractive digest above.
+ANTHROPIC_API_KEY = (os.environ.get("ANTHROPIC_API_KEY") or "").strip() or None
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8")
+
 # Network resilience (FRED is reliable from normal IPs; tune for slow links).
 HTTP_TIMEOUT = int(os.environ.get("HTTP_TIMEOUT", "25"))
 HTTP_RETRIES = int(os.environ.get("HTTP_RETRIES", "3"))

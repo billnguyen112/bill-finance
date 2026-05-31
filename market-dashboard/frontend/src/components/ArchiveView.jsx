@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Brief from "./Brief.jsx";
 
 function keyPoints(v, max = 5) {
   // one representative point from each theme, in theme order, up to `max`.
@@ -28,11 +29,15 @@ function Entry({ v }) {
       </div>
       {open && (
         <div className="arc-body">
-          <ul className="arc-points">
-            {pts.map((p, i) => (
-              <li key={i}><span className="arc-pt-theme">{p.theme}:</span> {p.text}</li>
-            ))}
-          </ul>
+          {v.brief ? (
+            <Brief brief={v.brief} />
+          ) : (
+            <ul className="arc-points">
+              {pts.map((p, i) => (
+                <li key={i}><span className="arc-pt-theme">{p.theme}:</span> {p.text}</li>
+              ))}
+            </ul>
+          )}
           {v.tickers?.length > 0 && (
             <div className="arc-tickers"><b>Tickers:</b> {v.tickers.join(", ")}</div>
           )}

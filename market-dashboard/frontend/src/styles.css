@@ -256,6 +256,19 @@ body {
 .views-tickers { font-size: 12px; color: var(--muted); margin-top: 12px; font-family: var(--mono); }
 .views-tickers b { color: var(--accent); font-family: system-ui, sans-serif; }
 
+/* MD-grade brief (Claude) */
+.brief { margin: 4px 0 6px; }
+.brief-thesis { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.brief-thesis p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--text); font-weight: 500; }
+.brief-stance { flex: none; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; white-space: nowrap; margin-top: 2px; }
+.stance-bull { background: rgba(63,166,106,.16); color: var(--green); border: 1px solid rgba(63,166,106,.4); }
+.stance-bear { background: rgba(204,75,75,.16); color: #e06666; border: 1px solid rgba(204,75,75,.4); }
+.stance-neutral { background: var(--card-2); color: var(--muted); border: 1px solid var(--line); }
+.brief-block { border-top: 1px solid var(--line); padding: 10px 0 2px; }
+.brief-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--accent-2); margin-bottom: 6px; }
+.brief-list { margin: 0; padding-left: 18px; }
+.brief-list li { font-size: 13px; line-height: 1.5; margin-bottom: 5px; color: #c7cdd8; }
+
 /* Archive tab */
 .arc-entry { border-top: 1px solid var(--line); padding: 12px 0; }
 .arc-entry:first-child { border-top: none; }

@@ -10,10 +10,12 @@ import re
 from collections import Counter
 
 import config
+import llm
 import sources
 
 # Bump when the digest logic changes so carried-over videos get re-digested.
-DIGEST_VERSION = 3
+# v4: attach an LLM-written MD-grade brief when ANTHROPIC_API_KEY is set.
+DIGEST_VERSION = 4
 
 _FILLER = re.compile(r"\b(uh+|um+|uhm+|erm+|hmm+|mm+|you know|i mean|kind of|sort of|right\?|okay so|so basically)\b", re.I)
 _LEAD = re.compile(r"^(and|so|but|now|well|okay|ok|yeah|yep|uh|um|right|look|see|i mean|you know)[\s,]+", re.I)
@@ -133,27 +135,14 @@ def _digest(text: str) -> dict:
     return {"themes": themes, "tickers": tickers, "tldr": tldr[:320]}
 
 
-def _channel_item(ch: dict) -> dict | None:
-    vids = sources.channel_videos(ch["channel_id"], limit=15)
-    target = next((v for v in vids if _is_update(v["title"])), None)
-    if not target:
+def _brief(ch: dict, title: str, text: str) -> dict | None:
+    """An LLM-written MD-grade brief, when a key is configured. Never fatal."""
+    if not config.ANTHROPIC_API_KEY:
         return None
-    text = sources.supadata_transcript(target["video_id"])
-    if not text:
+    try:
+        return llm.summarize(ch["name"], title, text)
+    except Exception:
         return None
-    if ch.get("trim_spotlight"):
-        text = _trim_spotlight(text)
-    d = _digest(text)
-    return {
-        "channel": ch["name"],
-        "video": {
-            "video_id": target["video_id"], "title": target["title"],
-            "published": target["published"],
-            "url": f"https://www.youtube.com/watch?v={target['video_id']}",
-        },
-        "word_count": len(text.split()),
-        **d,
-    }
 
 
 def _digest_video(ch: dict, v: dict) -> dict | None:
@@ -162,11 +151,15 @@ def _digest_video(ch: dict, v: dict) -> dict | None:
         return None
     if ch.get("trim_spotlight"):
         text = _trim_spotlight(text)
-    return {
+    entry = {
         "video_id": v["video_id"], "channel": ch["name"], "title": v["title"],
         "url": f"https://www.youtube.com/watch?v={v['video_id']}", "date": v["published"],
         "word_count": len(text.split()), "dv": DIGEST_VERSION, **_digest(text),
     }
+    brief = _brief(ch, v["title"], text)
+    if brief:
+        entry["brief"] = brief
+    return entry
 
 
 def build_archive(prev_by_id: dict | None = None, days: int = 95) -> dict | None:

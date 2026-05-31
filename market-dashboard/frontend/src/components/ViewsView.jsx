@@ -1,4 +1,5 @@
 import React from "react";
+import Brief from "./Brief.jsx";
 
 function latestPerChannel(archive) {
   if (!archive || !(archive.videos || []).length) return null;
@@ -38,9 +39,9 @@ export default function ViewsView({ views, archive, sections }) {
             {dt} · {Number(it.word_count || 0).toLocaleString()} words{" "}
             {it.channel === "Mark Meldrum" ? "(spotlight trimmed)" : ""}
           </div>
-          {it.tldr && <p className="views-tldr">{it.tldr}</p>}
+          {it.brief ? <Brief brief={it.brief} /> : it.tldr && <p className="views-tldr">{it.tldr}</p>}
 
-          {(it.themes || []).map((t) => (
+          {!it.brief && (it.themes || []).map((t) => (
             <div className="views-theme" key={t.theme}>
               <div className="views-theme-h">
                 <span className="vt-name">{t.theme}</span>
@@ -60,8 +61,9 @@ export default function ViewsView({ views, archive, sections }) {
         );
       })}
       <p className="foot muted">
-        Latest weekly transcripts via Supadata (server-side, works from the cloud), digested by keyword (no LLM)
-        and mapped onto your live tracker sections. Informational only, not financial advice.
+        Latest weekly transcripts via Supadata (server-side, works from the cloud), distilled into an MD-grade
+        brief by Claude when configured (otherwise a keyword digest) and mapped onto your live tracker sections.
+        Informational only, not financial advice.
       </p>
     </>
   );
