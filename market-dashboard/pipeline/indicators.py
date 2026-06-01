@@ -63,6 +63,16 @@ def build_metric(meta: dict, obs: list[tuple[str, float]]) -> dict:
             "pct": round((last_val / rval - 1) * 100, 2) if rval else None,
         }
 
+    # Weekly-cadence series (Fed balance sheet, TGA, reserves, net liquidity…):
+    # the prior observation IS ~1 week old, so the 7-day lookback was deduped into
+    # "prev". Surface it as a proper "1w" so it's labelled week-on-week — but only
+    # when the prior point is genuinely ~a week back (never for monthly/quarterly,
+    # where "prev" is a month/quarter and must stay an unlabelled delta).
+    if "1w" not in changes and "prev" in changes:
+        gap = (ld - _d(changes["prev"]["date"])).days
+        if 5 <= gap <= 9:
+            changes["1w"] = changes["prev"]
+
     # Headline number depends on the series kind.
     if kind == "index_yoy":
         yref = _on_or_before(obs, ld - timedelta(days=365))
