@@ -11,16 +11,22 @@ function signed(v) {
   return <span className={c}>{v > 0 ? "+" : ""}{num(v, 2)}pp</span>;
 }
 
-// Mini sparkline for an OAS tier.
-function Spark({ data, tone }) {
+// Mini sparkline for an OAS tier, with last week's level as a ghost line.
+function Spark({ data, tone, prev }) {
   if (!data || data.length < 2) return null;
   const W = 120, H = 28;
   const vals = data.map((p) => p[1]);
-  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const ext = prev != null ? [...vals, prev] : vals;
+  const min = Math.min(...ext), max = Math.max(...ext), span = max - min || 1;
   const x = (i) => (i / (data.length - 1)) * W;
   const y = (v) => H - 2 - ((v - min) / span) * (H - 4);
   const d = data.map((p, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(" ");
-  return <svg viewBox={`0 0 ${W} ${H}`} width="120" height="28" className="oas-spark"><path d={d} fill="none" stroke={toneColor(tone)} strokeWidth="1.5" /></svg>;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="120" height="28" className="oas-spark">
+      {prev != null && <line x1="0" x2={W} y1={y(prev)} y2={y(prev)} className="oas-ghost" strokeDasharray="3 2" />}
+      <path d={d} fill="none" stroke={toneColor(tone)} strokeWidth="1.5" />
+    </svg>
+  );
 }
 
 export default function AiCreditCard({ data, aiSource = "llm" }) {
@@ -54,7 +60,7 @@ export default function AiCreditCard({ data, aiSource = "llm" }) {
                 </td>
                 <td><b>{t.value != null ? `${num(t.value, 2)}%` : "—"}</b></td>
                 <td>{signed(t.w1)}</td>
-                <td><Spark data={t.spark} tone={t.is_junk ? "warn" : "ok"} /></td>
+                <td><Spark data={t.spark} prev={t.prev} tone={t.is_junk ? "warn" : "ok"} /></td>
                 <td className="l"><span className="cname">{t.note}</span></td>
               </tr>
             ))}

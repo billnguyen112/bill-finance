@@ -7,12 +7,16 @@ function RateChart({ c }) {
   const W = 300, H = 92, pad = { l: 4, r: 4, t: 4, b: 4 };
   const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
   const vals = data.map((p) => p[1]);
-  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  // include last week's level in the y-range so the ghost marker always fits
+  const ext = c.prev != null ? [...vals, c.prev] : vals;
+  const min = Math.min(...ext), max = Math.max(...ext), span = max - min || 1;
   const x = (i) => pad.l + (i / (data.length - 1)) * iw;
   const y = (v) => pad.t + ih - ((v - min) / span) * ih;
   const line = data.map((p, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(" ");
   const w1 = c.w1;
   const wcls = w1 == null ? "" : w1 > 0 ? "pos" : w1 < 0 ? "neg" : "";
+  const ghostY = c.prev != null ? y(c.prev) : null;
+  const lastY = data.length ? y(data[data.length - 1][1]) : null;
   return (
     <div className="fed-chart">
       <div className="fed-chart-top">
@@ -21,11 +25,18 @@ function RateChart({ c }) {
       </div>
       {data.length > 1 && (
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="fed-spark" preserveAspectRatio="none">
+          {ghostY != null && (
+            <line x1={pad.l} x2={W - pad.r} y1={ghostY} y2={ghostY}
+                  className="fed-ghost" strokeDasharray="4 3" />
+          )}
           <path d={line} fill="none" strokeWidth="1.6" />
+          {lastY != null && <circle cx={W - pad.r} cy={lastY} r="2.4" className="fed-dot" />}
         </svg>
       )}
       <div className="fed-chart-foot">
-        {w1 != null ? <span className={wcls}>{w1 > 0 ? "+" : ""}{num(w1, 2)} wk</span> : <span />}
+        {w1 != null
+          ? <span className={wcls}>{w1 > 0 ? "+" : ""}{num(w1, 2)} wk{c.prev != null ? ` · vs ${num(c.prev, 2)}` : ""}</span>
+          : <span />}
         {c.id && <a className="src-link" href={`https://fred.stlouisfed.org/series/${c.id}`} target="_blank" rel="noreferrer">source ↗</a>}
       </div>
     </div>

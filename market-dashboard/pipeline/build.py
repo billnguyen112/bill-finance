@@ -267,10 +267,12 @@ def _build_ai_credit(fetched: dict, ig_oas_metric: dict | None) -> dict | None:
         if m.get("status") != "ok":
             continue
         ch = m.get("changes", {})
+        w1 = (ch.get("1w") or {}).get("abs")
         tiers.append({
             "key": key, "label": label, "note": note, "is_junk": is_junk,
             "value": m["headline"], "fred_id": fid,
-            "w1": (ch.get("1w") or {}).get("abs"),
+            "prev": round(m["headline"] - w1, 2) if w1 is not None and m.get("headline") is not None else None,
+            "w1": w1,
             "m1": (ch.get("1m") or {}).get("abs"),
             "y1": (ch.get("1y") or {}).get("abs"),
             "low_1y": m.get("stats", {}).get("low_1y"),
@@ -555,19 +557,31 @@ def build(verbose: bool = False) -> dict:
         chart_keys = [("fed_funds", "DFF"), ("ust_2y", "DGS2"), ("ust_10y", "DGS10"),
                       ("ust_30y", "DGS30"), ("curve_2s10s", "T10Y2Y"),
                       ("real_10y", "DFII10"), ("breakeven_10y", "T10YIE")]
+
+        def _week_ago(obs):
+            """Value from ~1 week earlier (most recent obs at least 5 days back)."""
+            if not obs:
+                return None
+            target = date.fromisoformat(obs[-1][0]) - _td(days=5)
+            return next((v for d, v in reversed(obs) if date.fromisoformat(d) <= target), None)
+
         charts = []
         # 3M T-bill (front of the implied path) — straight from the fetched series.
         m3 = fetched.get("DGS3MO", ([], None))[0]
         if m3:
+            prev = _week_ago(m3)
             charts.append({"label": "3M T-bill", "unit": "%", "value": round(m3[-1][1], 2),
-                           "w1": None, "id": "DGS3MO",
+                           "w1": round(m3[-1][1] - prev, 2) if prev is not None else None,
+                           "prev": round(prev, 2) if prev is not None else None, "id": "DGS3MO",
                            "spark": indicators._downsample([(d, v) for d, v in m3[-520:]])})
         for key, fid in chart_keys:
             m = metrics_by_key.get(key)
             if m and m.get("status") == "ok" and m.get("spark"):
+                prev = _week_ago(fetched.get(fid, ([], None))[0])
                 charts.append({"label": m["label"], "unit": m.get("headline_unit") or m.get("unit") or "",
                                "value": m.get("headline"),
                                "w1": (m.get("changes", {}).get("1w") or {}).get("abs"),
+                               "prev": round(prev, 2) if prev is not None else None,
                                "id": fid, "spark": m["spark"]})
         fed_read["charts"] = charts
 
