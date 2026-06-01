@@ -1,5 +1,6 @@
 import React from "react";
 import { fmtDate } from "../format.js";
+import { useChart } from "./ChartModal.jsx";
 
 const TONE = { good: "#3fa66a", ok: "#6cba8a", warn: "#d9a441", bad: "#cc4b4b" };
 const toneColor = (t) => TONE[t] || "#8b94a3";
@@ -62,12 +63,20 @@ function Chart({ series, tone }) {
 }
 
 export default function MarginDebtCard({ margin }) {
+  const chart = useChart();   // hook must run before any early return
   if (!margin || !margin.series?.length) return null;
   const sig = margin.signal || {};
+  const canExplore = chart.has("margin_debt");
+  const openChart = () => chart.open({
+    key: "margin_debt", label: "Margin debt (FINRA)", unit: "$M", good: -1,
+    source_url: "https://www.finra.org/investors/learn-to-invest/advanced-investing/margin-statistics",
+  });
   return (
     <section className="card">
       <div className="md-head">
-        <span className="hero-eyebrow">Margin debt — investor leverage (FINRA)</span>
+        <span className="hero-eyebrow">Margin debt — investor leverage (FINRA)
+          {canExplore && <button className="spark-expand-btn" onClick={openChart} title="Open interactive chart"> ⤢</button>}
+        </span>
         <span className="md-latest">{money(margin.latest)}
           {sig.label && <span className="md-badge" style={{ color: toneColor(sig.tone), borderColor: toneColor(sig.tone) }}>{sig.label}</span>}
         </span>

@@ -15,6 +15,7 @@ import MarginDebtCard from "./components/MarginDebtCard.jsx";
 import MacroOutlook from "./components/MacroOutlook.jsx";
 import AiRead from "./components/AiRead.jsx";
 import AiCreditCard from "./components/AiCreditCard.jsx";
+import { ChartProvider } from "./components/ChartModal.jsx";
 
 function SectionCard({ sec, aiSource }) {
   const [open, setOpen] = useState(false);
@@ -99,6 +100,7 @@ export default function App() {
   const aiSource = snap?.macro?.source || "rules";
 
   return (
+   <ChartProvider keys={snap?.interactive_keys}>
     <div className="app">
       <header className="topbar">
         <div className="brand">
@@ -239,5 +241,6 @@ export default function App() {
         {snap?.errors?.length > 0 && `, ${snap.errors.length} unavailable`}.
       </footer>
     </div>
+   </ChartProvider>
   );
 }

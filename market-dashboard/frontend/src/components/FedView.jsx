@@ -1,8 +1,16 @@
 import React from "react";
 import { num } from "../format.js";
 import AiRead from "./AiRead.jsx";
+import { useChart } from "./ChartModal.jsx";
 
 function RateChart({ c }) {
+  const chart = useChart();
+  const canExplore = c.ckey && chart.has(c.ckey);
+  const openChart = () => chart.open({
+    key: c.ckey, label: c.label, unit: c.unit,
+    good: c.id === "T10Y2Y" ? 1 : -1,   // steeper curve good; higher rates bad
+    source_url: c.id ? `https://fred.stlouisfed.org/series/${c.id}` : null,
+  });
   const data = c.spark || [];
   const W = 300, H = 92, pad = { l: 4, r: 4, t: 4, b: 4 };
   const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
@@ -20,9 +28,11 @@ function RateChart({ c }) {
   const ghostY = c.prev != null ? y(c.prev) : null;
   const lastY = data.length ? y(data[data.length - 1][1]) : null;
   return (
-    <div className="fed-chart">
+    <div className={`fed-chart${canExplore ? " clickable" : ""}`}
+         onClick={canExplore ? openChart : undefined}
+         title={canExplore ? "Open interactive chart" : undefined}>
       <div className="fed-chart-top">
-        <span className="fed-chart-label">{c.label}</span>
+        <span className="fed-chart-label">{c.label}{canExplore && <span className="spark-expand"> ⤢</span>}</span>
         <span className="fed-chart-val">{c.value != null ? `${num(c.value, 2)}${c.unit}` : "—"}</span>
       </div>
       {data.length > 1 && (

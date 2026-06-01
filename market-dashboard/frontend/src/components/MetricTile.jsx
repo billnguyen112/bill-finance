@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import Sparkline from "./Sparkline.jsx";
-import { fmtHeadline, changeDisplay, scoreColor, fmtDate, equityMove, moveColor } from "../format.js";
+import { fmtHeadline, changeDisplay, scoreColor, fmtDate, equityMove, moveColor, goodDir } from "../format.js";
+import { useChart } from "./ChartModal.jsx";
 
 function Delta({ m, horizon, label }) {
   const d = changeDisplay(m, horizon);
@@ -15,6 +16,7 @@ function Delta({ m, horizon, label }) {
 
 export default function MetricTile({ m }) {
   const [open, setOpen] = useState(false);
+  const chart = useChart();   // hooks must run unconditionally (before any early return)
   if (m.status !== "ok") {
     return (
       <div className="tile err" title={m.error}>
@@ -27,6 +29,10 @@ export default function MetricTile({ m }) {
   // Colour the sparkline green/red by whether the recent move is good or bad for
   // equities — using the rule signal when present, else the metric's move direction.
   const sparkColor = sig ? scoreColor(sig.score) : moveColor(equityMove(m));
+  const canExplore = chart.has(m.key);
+  const openChart = () => chart.open({
+    key: m.key, label: m.label, unit: m.headline_unit || m.unit, good: goodDir(m), source_url: m.source_url,
+  });
   return (
     <div className="tile">
       <div className="t-top">
@@ -52,7 +58,14 @@ export default function MetricTile({ m }) {
         <Delta m={m} horizon="1y" label="1y" />
         {!m.changes?.["1w"] && <Delta m={m} horizon="prev" label="Δ" />}
       </div>
-      <Sparkline data={m.spark} color={sparkColor} w={170} h={32} />
+      {canExplore ? (
+        <button className="spark-btn" onClick={openChart} title="Open interactive chart">
+          <Sparkline data={m.spark} color={sparkColor} w={170} h={32} />
+          <span className="spark-expand">⤢</span>
+        </button>
+      ) : (
+        <Sparkline data={m.spark} color={sparkColor} w={170} h={32} />
+      )}
       {sig && <div className="t-note">{sig.note}</div>}
       <div className="t-asof">
         as of {fmtDate(m.latest?.date)}

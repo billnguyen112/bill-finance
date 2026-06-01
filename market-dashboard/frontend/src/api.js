@@ -21,6 +21,7 @@ async function tryJson(paths) {
 // so they work under a GitHub Pages project subpath.
 export const getSnapshot = () => tryJson(["/api/snapshot", "snapshot.json"]);
 export const getHistory = () => tryJson(["/api/history", "history.json"]);
+export const getSeries = (key) => tryJson([`/api/series/${key}`, `series/${key}.json`]);
 
 export async function probeBackend() {
   try {

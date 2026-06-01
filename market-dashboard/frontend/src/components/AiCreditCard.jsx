@@ -1,6 +1,7 @@
 import React from "react";
 import { num } from "../format.js";
 import AiRead from "./AiRead.jsx";
+import { useChart } from "./ChartModal.jsx";
 
 const TONE = { good: "#3fa66a", ok: "#6cba8a", warn: "#d9a441", bad: "#cc4b4b" };
 const toneColor = (t) => TONE[t] || "#8b94a3";
@@ -30,6 +31,7 @@ function Spark({ data, tone, prev }) {
 }
 
 export default function AiCreditCard({ data, aiSource = "llm" }) {
+  const chart = useChart();   // hook must run before any early return
   if (!data || !(data.tiers || []).length) return null;
   const sig = data.signal || {};
   return (
@@ -53,17 +55,23 @@ export default function AiCreditCard({ data, aiSource = "llm" }) {
             <tr><th className="l">Rating tier</th><th>OAS</th><th>1W</th><th>trend (2y)</th><th className="l">where it sits</th></tr>
           </thead>
           <tbody>
-            {data.tiers.map((t) => (
-              <tr key={t.key}>
+            {data.tiers.map((t) => {
+              const canExplore = chart.has(t.key);
+              const openChart = () => chart.open({ key: t.key, label: `${t.label} (OAS)`, unit: "%", good: -1, source_url: t.source_url });
+              return (
+              <tr key={t.key} className={canExplore ? "clickable" : ""}
+                  onClick={canExplore ? openChart : undefined}
+                  title={canExplore ? "Open interactive chart" : undefined}>
                 <td className="l">
-                  <span className="sym">{t.is_junk ? "● " : "○ "}{t.label}</span>
+                  <span className="sym">{t.is_junk ? "● " : "○ "}{t.label}{canExplore && <span className="spark-expand"> ⤢</span>}</span>
                 </td>
                 <td><b>{t.value != null ? `${num(t.value, 2)}%` : "—"}</b></td>
                 <td>{signed(t.w1)}</td>
                 <td><Spark data={t.spark} prev={t.prev} tone={t.is_junk ? "warn" : "ok"} /></td>
                 <td className="l"><span className="cname">{t.note}</span></td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

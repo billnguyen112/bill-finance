@@ -71,6 +71,7 @@ jobs:
         run: |
           cp data/snapshot.json frontend/dist/snapshot.json
           cp data/history.json  frontend/dist/history.json
+          cp -r data/series      frontend/dist/series || echo "no per-series history this run"
 
       - uses: actions/configure-pages@v5
 

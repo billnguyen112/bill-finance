@@ -45,6 +45,14 @@ def history():
     return jsonify(_read_json(config.HISTORY_PATH, {"points": []}))
 
 
+@app.get("/api/series/<key>")
+def series(key):
+    import re
+    if not re.fullmatch(r"[a-z0-9_]+", key):   # path-traversal guard
+        return jsonify({"error": "bad key"}), 400
+    return jsonify(_read_json(config.DATA_DIR / "series" / f"{key}.json", {"points": []}))
+
+
 @app.post("/api/refresh")
 def refresh():
     if not _refresh_lock.acquire(blocking=False):

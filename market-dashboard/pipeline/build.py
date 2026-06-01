@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 
 import config
 import sources
@@ -309,6 +309,27 @@ def _build_ai_credit(fetched: dict, ig_oas_metric: dict | None) -> dict | None:
             "deals": config.AI_CREDIT_DEALS, "signal": sig}
 
 
+def _write_histories(histories: dict) -> list[str]:
+    """Write per-series full daily history (<=15y) to data/series/<key>.json for the
+    interactive charts (lazy-loaded on click). Points are [date, value] arrays."""
+    sdir = config.DATA_DIR / "series"
+    sdir.mkdir(parents=True, exist_ok=True)
+    cutoff = (date.today() - timedelta(days=365 * 15)).isoformat()
+    written = []
+    for key, obs in histories.items():
+        if not obs:
+            continue
+        pts = [[d, round(v, 4)] for d, v in obs if d >= cutoff]
+        if len(pts) < 2:
+            pts = [[d, round(v, 4)] for d, v in obs]
+        if len(pts) < 2:
+            continue
+        (sdir / f"{key}.json").write_text(
+            json.dumps({"key": key, "points": pts}, separators=(",", ":")))
+        written.append(key)
+    return written
+
+
 def _build_gauges(metrics_by_key: dict, cape) -> dict:
     """VIX regime band, equity risk premium, and a free PMI-style manufacturing
     pulse — the sentiment/valuation reads I lean on every week."""
@@ -392,6 +413,7 @@ def build(verbose: bool = False) -> dict:
         print(f"FRED key: {'set (API mode)' if config.FRED_API_KEY else 'MISSING (keyless CSV — throttled in CI)'}"
               f" | FMP key: {'set' if config.FMP_API_KEY else 'missing'}")
     metrics_by_key: dict[str, dict] = {}
+    histories: dict[str, list] = {}   # key -> full obs, for the interactive charts
     errors: list[dict] = []
 
     # Fetch every FRED series (data + curve tenors) concurrently — sequential
@@ -428,6 +450,8 @@ def build(verbose: bool = False) -> dict:
             metric = indicators.build_metric(meta, obs)
             if metric.get("status") != "ok":
                 errors.append({"key": meta["key"], "error": metric.get("error", "no data")})
+            else:
+                histories[meta["key"]] = obs
         sig = analyze.signal_for(metric)
         if sig:
             metric["signal"] = sig
@@ -456,6 +480,7 @@ def build(verbose: bool = False) -> dict:
                 gm["explain"] = ex
             gm["source_url"] = "https://www.tradingview.com/symbols/TVC-GOLD/"
             metrics_by_key["gold"] = gm
+            histories["gold"] = gold_obs
 
     def _attach(m, key, source):
         m["source_url"] = source
@@ -488,6 +513,7 @@ def build(verbose: bool = False) -> dict:
                 {"key": "net_liquidity", "label": "Net Liquidity", "section": "liquidity",
                  "kind": "price", "unit": "$M", "better": "up"}, net)
             _attach(nm, "net_liquidity", "https://fred.stlouisfed.org/series/WALCL")
+            histories["net_liquidity"] = net
 
     # Small caps (IWM) + regional banks (KRE) via FMP — both signals I watch.
     if config.FMP_API_KEY:
@@ -499,6 +525,7 @@ def build(verbose: bool = False) -> dict:
                     {"key": key, "label": label, "section": "equities",
                      "kind": "price", "unit": "$", "better": better}, obs)
                 _attach(m, key, f"https://stockanalysis.com/etf/{sym.lower()}/")
+                histories[key] = obs
 
     # Yield curve (best effort; tolerate missing tenors)
     curve = []
@@ -591,7 +618,7 @@ def build(verbose: bool = False) -> dict:
             prev = _week_ago(m3)
             w1 = round(m3[-1][1] - prev, 2) if prev is not None else None
             charts.append({"label": "3M T-bill", "unit": "%", "value": round(m3[-1][1], 2),
-                           "w1": w1, "good": _equity_move(w1, "DGS3MO"),
+                           "w1": w1, "good": _equity_move(w1, "DGS3MO"), "ckey": "ust_3m",
                            "prev": round(prev, 2) if prev is not None else None, "id": "DGS3MO",
                            "spark": indicators._downsample([(d, v) for d, v in m3[-520:]])})
         for key, fid in chart_keys:
@@ -601,7 +628,7 @@ def build(verbose: bool = False) -> dict:
                 w1 = (m.get("changes", {}).get("1w") or {}).get("abs")
                 charts.append({"label": m["label"], "unit": m.get("headline_unit") or m.get("unit") or "",
                                "value": m.get("headline"), "w1": w1, "good": _equity_move(w1, fid),
-                               "prev": round(prev, 2) if prev is not None else None,
+                               "ckey": key, "prev": round(prev, 2) if prev is not None else None,
                                "id": fid, "spark": m["spark"]})
         fed_read["charts"] = charts
 
@@ -682,6 +709,18 @@ def build(verbose: bool = False) -> dict:
         "source": (macro_ai or {}).get("source", "rules"),
     }
 
+    # Per-series history files for the interactive (click-to-explore) charts.
+    for _k, _fid, *_rest in config.AI_CREDIT_OAS:
+        _o = fetched.get(_fid, ([], None))[0]
+        if _o:
+            histories[_k] = _o
+    _m3 = fetched.get("DGS3MO", ([], None))[0]
+    if _m3:
+        histories["ust_3m"] = _m3
+    if margin_debt and margin_debt.get("series"):
+        histories["margin_debt"] = [(p[0], p[1]) for p in margin_debt["series"]]
+    interactive_keys = _write_histories(histories)
+
     # Data provenance — what's pulled, from where, with live status.
     ok_count = sum(1 for m in metrics_by_key.values() if m.get("status") == "ok")
     fred_series = [
@@ -753,6 +792,7 @@ def build(verbose: bool = False) -> dict:
         "fred_mode": "api" if config.FRED_API_KEY else "csv",
         "fmp_enabled": bool(config.FMP_API_KEY),
         "anthropic_enabled": bool(config.ANTHROPIC_API_KEY),
+        "interactive_keys": interactive_keys,
     }
     config.SNAPSHOT_PATH.write_text(json.dumps(snapshot, indent=2))
     _append_history(now, overall, cape)

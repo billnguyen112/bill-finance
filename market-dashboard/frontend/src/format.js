@@ -38,7 +38,7 @@ const EQUITY_DIR = {
   dollar: -1,                                           // stronger dollar = bad for risk
 };
 
-function goodDir(m) {
+export function goodDir(m) {
   if (m.better === "up") return 1;
   if (m.better === "down") return -1;
   return EQUITY_DIR[m.key] ?? 0;
