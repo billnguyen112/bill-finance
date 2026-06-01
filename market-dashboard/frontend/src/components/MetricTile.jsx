@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Sparkline from "./Sparkline.jsx";
-import { fmtHeadline, changeDisplay, scoreColor, fmtDate } from "../format.js";
+import { fmtHeadline, changeDisplay, scoreColor, fmtDate, equityMove, moveColor } from "../format.js";
 
 function Delta({ m, horizon, label }) {
   const d = changeDisplay(m, horizon);
@@ -24,7 +24,9 @@ export default function MetricTile({ m }) {
     );
   }
   const sig = m.signal;
-  const sparkColor = sig ? scoreColor(sig.score) : "#6b7585";
+  // Colour the sparkline green/red by whether the recent move is good or bad for
+  // equities — using the rule signal when present, else the metric's move direction.
+  const sparkColor = sig ? scoreColor(sig.score) : moveColor(equityMove(m));
   return (
     <div className="tile">
       <div className="t-top">

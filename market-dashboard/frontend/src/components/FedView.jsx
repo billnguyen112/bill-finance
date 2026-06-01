@@ -14,7 +14,9 @@ function RateChart({ c }) {
   const y = (v) => pad.t + ih - ((v - min) / span) * ih;
   const line = data.map((p, i) => `${i ? "L" : "M"} ${x(i).toFixed(1)} ${y(p[1]).toFixed(1)}`).join(" ");
   const w1 = c.w1;
-  const wcls = w1 == null ? "" : w1 > 0 ? "pos" : w1 < 0 ? "neg" : "";
+  // colour by good/bad for equities (green up, red down) and the w/w number too
+  const stroke = c.good > 0 ? "#3fa66a" : c.good < 0 ? "#cc4b4b" : "#6b7585";
+  const wcls = c.good > 0 ? "pos" : c.good < 0 ? "neg" : "";
   const ghostY = c.prev != null ? y(c.prev) : null;
   const lastY = data.length ? y(data[data.length - 1][1]) : null;
   return (
@@ -29,8 +31,8 @@ function RateChart({ c }) {
             <line x1={pad.l} x2={W - pad.r} y1={ghostY} y2={ghostY}
                   className="fed-ghost" strokeDasharray="4 3" />
           )}
-          <path d={line} fill="none" strokeWidth="1.6" />
-          {lastY != null && <circle cx={W - pad.r} cy={lastY} r="2.4" className="fed-dot" />}
+          <path d={line} fill="none" strokeWidth="1.6" stroke={stroke} />
+          {lastY != null && <circle cx={W - pad.r} cy={lastY} r="2.4" fill={stroke} />}
         </svg>
       )}
       <div className="fed-chart-foot">

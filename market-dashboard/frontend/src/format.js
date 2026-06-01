@@ -29,7 +29,21 @@ export function num(v, d = 2) {
   return n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
-// A change object -> {text, dir} where dir is +1/-1/0 in "good for risk" terms.
+// A change object -> {text, dir} where dir is +1/-1/0 in "good for equities" terms.
+// For context-only series (better === "none") we apply an equity-impact direction
+// so rates / oil / the dollar still light up green (good) or red (bad).
+const EQUITY_DIR = {
+  fed_funds: -1, ust_2y: -1, ust_10y: -1, ust_30y: -1, // higher rates = bad for equities
+  wti: -1, brent: -1,                                   // higher oil = bad
+  dollar: -1,                                           // stronger dollar = bad for risk
+};
+
+function goodDir(m) {
+  if (m.better === "up") return 1;
+  if (m.better === "down") return -1;
+  return EQUITY_DIR[m.key] ?? 0;
+}
+
 export function changeDisplay(m, horizon) {
   const c = m.changes?.[horizon];
   if (!c) return null;
@@ -38,11 +52,26 @@ export function changeDisplay(m, horizon) {
   if (raw === null || raw === undefined) return null;
   const sign = raw > 0 ? "+" : "";
   const text = showPct ? `${sign}${num(raw, 1)}%` : `${sign}${num(raw, 2)}`;
-  // direction in risk terms depends on which way is "good"
-  let dir = 0;
-  if (m.better === "up") dir = Math.sign(raw);
-  else if (m.better === "down") dir = -Math.sign(raw);
+  const g = goodDir(m);
+  const dir = g === 0 ? 0 : Math.sign(raw) * g;
   return { text, dir };
+}
+
+// Direction of a metric's most recent move in "good for equities" terms
+// (+1 good / -1 bad / 0 neutral). Falls back 1w -> 1m -> prev so every chart resolves.
+export function equityMove(m) {
+  const c = m.changes?.["1w"] || m.changes?.["1m"] || m.changes?.prev;
+  if (!c) return 0;
+  const showPct = ["price", "level", "level_chg"].includes(m.kind);
+  const raw = showPct ? c.pct : c.abs;
+  if (raw === null || raw === undefined || raw === 0) return 0;
+  const g = goodDir(m);
+  return g === 0 ? 0 : Math.sign(raw) * g;
+}
+
+// Green (good) / red (bad) / gray (neutral) for an equity-direction value.
+export function moveColor(dir) {
+  return dir > 0 ? "#3fa66a" : dir < 0 ? "#cc4b4b" : "#6b7585";
 }
 
 export function fmtDate(iso) {

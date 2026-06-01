@@ -316,6 +316,11 @@ def _build_gauges(metrics_by_key: dict, cape) -> dict:
         m = metrics_by_key.get(key)
         return m.get("headline") if m and m.get("status") == "ok" else None
 
+    def _w1(key):
+        m = metrics_by_key.get(key)
+        c = (m or {}).get("changes", {}).get("1w") if m else None
+        return round(c["abs"], 2) if c and c.get("abs") is not None else None
+
     gauges: dict = {}
 
     # VIX regime — my explicit bands (15-20 = calm/uptrend).
@@ -330,7 +335,7 @@ def _build_gauges(metrics_by_key: dict, cape) -> dict:
         else:
             zone, tone = "Fear", "bad"
         gauges["vix"] = {
-            "value": round(vix, 1), "zone": zone, "tone": tone, "max": 45,
+            "value": round(vix, 1), "zone": zone, "tone": tone, "max": 45, "w1": _w1("vix"),
             "bands": [
                 {"label": "Complacent", "lo": 0, "hi": 15, "tone": "warn"},
                 {"label": "Calm", "lo": 15, "hi": 20, "tone": "good"},
@@ -356,8 +361,12 @@ def _build_gauges(metrics_by_key: dict, cape) -> dict:
             label, tone = "Moderate", "ok"
         else:
             label, tone = "Wide — equities well compensated", "good"
+        # ERP moves ~inversely with the 10Y week to week (CAPE is slow); a rising
+        # 10Y compresses the premium (bad), a falling 10Y widens it (good).
+        ten_w1 = _w1("ust_10y")
         gauges["erp"] = {"earnings_yield": ey, "ten_year": round(ten, 2),
-                         "spread": spread, "cape": round(cape, 1), "label": label, "tone": tone}
+                         "spread": spread, "cape": round(cape, 1), "label": label, "tone": tone,
+                         "w1": round(-ten_w1, 2) if ten_w1 is not None else None}
 
     # Manufacturing pulse — free ISM stand-in: average of the regional Fed surveys.
     emp, phl = _hl("empire_mfg"), _hl("philly_mfg")
@@ -565,22 +574,33 @@ def build(verbose: bool = False) -> dict:
             target = date.fromisoformat(obs[-1][0]) - _td(days=5)
             return next((v for d, v in reversed(obs) if date.fromisoformat(d) <= target), None)
 
+        # Which way is "good for equities" for each chart (higher rates = bad;
+        # a steeper 2s10s curve = good).
+        good_dir = {"DFF": -1, "DGS3MO": -1, "DGS2": -1, "DGS10": -1, "DGS30": -1,
+                    "T10Y2Y": 1, "DFII10": -1, "T10YIE": -1}
+
+        def _equity_move(w1, fid):
+            if w1 is None or w1 == 0:
+                return 0
+            return (1 if w1 > 0 else -1) * good_dir.get(fid, 0)
+
         charts = []
         # 3M T-bill (front of the implied path) — straight from the fetched series.
         m3 = fetched.get("DGS3MO", ([], None))[0]
         if m3:
             prev = _week_ago(m3)
+            w1 = round(m3[-1][1] - prev, 2) if prev is not None else None
             charts.append({"label": "3M T-bill", "unit": "%", "value": round(m3[-1][1], 2),
-                           "w1": round(m3[-1][1] - prev, 2) if prev is not None else None,
+                           "w1": w1, "good": _equity_move(w1, "DGS3MO"),
                            "prev": round(prev, 2) if prev is not None else None, "id": "DGS3MO",
                            "spark": indicators._downsample([(d, v) for d, v in m3[-520:]])})
         for key, fid in chart_keys:
             m = metrics_by_key.get(key)
             if m and m.get("status") == "ok" and m.get("spark"):
                 prev = _week_ago(fetched.get(fid, ([], None))[0])
+                w1 = (m.get("changes", {}).get("1w") or {}).get("abs")
                 charts.append({"label": m["label"], "unit": m.get("headline_unit") or m.get("unit") or "",
-                               "value": m.get("headline"),
-                               "w1": (m.get("changes", {}).get("1w") or {}).get("abs"),
+                               "value": m.get("headline"), "w1": w1, "good": _equity_move(w1, fid),
                                "prev": round(prev, 2) if prev is not None else None,
                                "id": fid, "spark": m["spark"]})
         fed_read["charts"] = charts

@@ -161,6 +161,12 @@ body {
 /* AI-credit: OAS sparkline + deals list */
 .oas-spark { vertical-align: middle; }
 .oas-spark .oas-ghost { stroke: var(--muted); stroke-width: 0.8; opacity: 0.55; }
+
+/* Week-on-week chip (gauges) */
+.wow { font-size: 11px; font-family: var(--mono); font-weight: 600; }
+.wow.pos { color: var(--green); }
+.wow.neg { color: var(--red); }
+.wow.flat { color: var(--muted); }
 .deals { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
 .deals-h { font-size: 12px; font-weight: 700; color: var(--accent-2); margin-bottom: 7px; }
 .deal { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 4px 0; font-size: 12.5px; }
@@ -175,9 +181,7 @@ body {
 .fed-chart-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .fed-chart-val { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--accent-2); }
 .fed-spark { display: block; height: 64px; margin: 6px 0 4px; }
-.fed-spark path { stroke: var(--accent); }
 .fed-spark .fed-ghost { stroke: var(--muted); stroke-width: 1; opacity: 0.6; }
-.fed-spark .fed-dot { fill: var(--accent); }
 .fed-chart-foot { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-family: var(--mono); }
 .fed-chart-foot .pos { color: var(--green); } .fed-chart-foot .neg { color: var(--red); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }

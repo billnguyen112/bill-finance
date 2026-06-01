@@ -4,6 +4,13 @@ import { num } from "../format.js";
 const TONE = { good: "#3fa66a", ok: "#6cba8a", warn: "#d9a441", bad: "#cc4b4b" };
 const toneColor = (t) => TONE[t] || "#8b94a3";
 
+// Week-on-week chip. `goodWhenUp` flags whether a rise is good for equities.
+function WoW({ v, goodWhenUp = true, suffix = "" }) {
+  if (v == null || v === 0) return v === 0 ? <span className="wow flat">0.00 wk</span> : null;
+  const good = goodWhenUp ? v > 0 : v < 0;
+  return <span className={`wow ${good ? "pos" : "neg"}`}>{v > 0 ? "+" : ""}{num(v, 2)}{suffix} wk</span>;
+}
+
 function VixBand({ vix }) {
   if (!vix) return null;
   const max = vix.max || 45;
@@ -12,7 +19,9 @@ function VixBand({ vix }) {
     <div className="gauge-cell">
       <div className="gauge-cell-head">
         <span className="gc-title">VIX regime <span className="gc-by">— my fear bands</span></span>
-        <span className="gc-val" style={{ color: toneColor(vix.tone) }}>{num(vix.value, 1)}</span>
+        <span className="gc-val" style={{ color: toneColor(vix.tone) }}>
+          {num(vix.value, 1)} <WoW v={vix.w1} goodWhenUp={false} />
+        </span>
       </div>
       <div className="vixband">
         {(vix.bands || []).map((b) => (
@@ -36,7 +45,9 @@ function ErpCell({ erp }) {
     <div className="gauge-cell">
       <div className="gauge-cell-head">
         <span className="gc-title">Equity risk premium <span className="gc-by">— earnings yield − 10Y</span></span>
-        <span className="gc-val" style={{ color: toneColor(erp.tone) }}>{erp.spread > 0 ? "+" : ""}{num(erp.spread, 2)}%</span>
+        <span className="gc-val" style={{ color: toneColor(erp.tone) }}>
+          {erp.spread > 0 ? "+" : ""}{num(erp.spread, 2)}% <WoW v={erp.w1} goodWhenUp={true} suffix="pp" />
+        </span>
       </div>
       <div className="erp-row">
         <div className="erp-stat"><span className="erp-n">{num(erp.earnings_yield, 2)}%</span><span className="erp-l">earnings yield (1÷CAPE {num(erp.cape, 0)})</span></div>
