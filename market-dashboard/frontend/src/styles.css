@@ -129,6 +129,13 @@ body {
 .curve-card h3, .section-head h3 { margin: 0 0 10px; font-family: var(--display); font-weight: 600; font-size: 19px; }
 .curve .grid { stroke: var(--line); }
 .curve .axis { fill: var(--muted); font-size: 9px; font-family: var(--mono); }
+.curve .curve-ww { font-size: 8.5px; font-family: var(--mono); fill: var(--muted); }
+.curve .curve-ww.up { fill: var(--red); }
+.curve .curve-ww.down { fill: var(--green); }
+.curve-legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 11px; margin-top: 6px; align-items: center; }
+.curve-legend .cl-line { display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--muted); vertical-align: middle; margin-right: 5px; }
+.curve-legend .cl-line.solid { border-top-color: var(--green); }
+.curve-legend .cl-line.dash { border-top-style: dashed; }
 
 /* Sections */
 .section-summary { color: #c7cdd8; font-size: 13.5px; margin: 0 0 14px; }

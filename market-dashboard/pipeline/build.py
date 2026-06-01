@@ -491,10 +491,17 @@ def build(verbose: bool = False) -> dict:
 
     # Yield curve (best effort; tolerate missing tenors)
     curve = []
+    from datetime import timedelta as _td
     for tenor, fid in config.CURVE:
         obs, _ = fetched.get(fid, ([], None))
         if obs:
-            curve.append({"tenor": tenor, "value": round(obs[-1][1], 2), "date": obs[-1][0]})
+            last_d, last_v = obs[-1]
+            # value from ~1 week earlier (most recent obs at least 5 days back)
+            target = date.fromisoformat(last_d) - _td(days=5)
+            prev_v = next((v for d, v in reversed(obs) if date.fromisoformat(d) <= target), None)
+            curve.append({"tenor": tenor, "value": round(last_v, 2), "date": last_d,
+                          "prev": round(prev_v, 2) if prev_v is not None else None,
+                          "w1": round(last_v - prev_v, 2) if prev_v is not None else None})
 
     overall = analyze.overall_read(metrics_by_key)
 
