@@ -70,7 +70,7 @@ export default function SemisView({ semis, aiSource = "llm" }) {
                 <thead>
                   <tr>
                     <th className="l">Company</th><th>Price</th><th>% from high</th>
-                    <th>1M</th><th>1Y</th><th>Fwd P/E</th><th>FY28 P/E</th><th>Rev y/y</th><th>Next earnings</th>
+                    <th>1W</th><th>1M</th><th>1Y</th><th>Fwd P/E</th><th>FY28 P/E</th><th>Rev y/y</th><th>Next earnings</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -82,6 +82,7 @@ export default function SemisView({ semis, aiSource = "llm" }) {
                       </td>
                       <td>{c.price != null ? `$${num(c.price, 2)}` : "—"} <span className="mc">{mcap(c.market_cap)}</span></td>
                       <td>{signed(c.pct_from_high)}</td>
+                      <td>{signed(c.w1)}</td>
                       <td>{signed(c.m1)}</td>
                       <td>{signed(c.y1)}</td>
                       <td>{c.fwd_pe != null ? num(c.fwd_pe, 1) : <span className="muted">—</span>}</td>

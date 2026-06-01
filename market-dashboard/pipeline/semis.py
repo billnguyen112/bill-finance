@@ -105,6 +105,7 @@ def _one(item) -> dict:
         "above_50dma": (price > a50) if price and a50 else None,
         "above_200dma": (price > a200) if price and a200 else None,
         "m1": _r(pc.get("1M")), "m3": _r(pc.get("3M")), "y1": _r(pc.get("1Y")),
+        "w1": _r(pc.get("5D")),
         "rev_yoy": rev_yoy, "rev_qoq": rev_qoq, "next_earnings": nxt,
     }
 
