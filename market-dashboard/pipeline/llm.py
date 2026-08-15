@@ -88,7 +88,7 @@ def analyze_macro(payload: dict) -> dict | None:
         import anthropic
     except ImportError:
         return None
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, timeout=120.0, max_retries=1)
     user = f"{_INSTRUCTION}\n\n{json.dumps(payload, separators=(',', ':'))}"
     try:
         resp = client.messages.create(
