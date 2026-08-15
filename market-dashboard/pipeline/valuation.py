@@ -98,13 +98,19 @@ def build_valuation() -> dict | None:
         return None
     with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
         rows = list(ex.map(_one, UNIVERSE))
-    for _ in range(2):  # live-only retry for transiently rate-limited names
-        missing = [i for i, c in enumerate(rows) if c.get("price") is None]
-        if not missing:
-            break
-        for i in missing:
-            time.sleep(0.3)
-            rows[i] = _one(UNIVERSE[i])
+    # Retry stragglers only for transient rate-limiting (a minority missing). If
+    # most are empty, FMP is down — skip retries so it fails fast, not slow.
+    missing = [i for i, c in enumerate(rows) if c.get("price") is None]
+    if missing and len(missing) <= len(rows) * 0.4:
+        for _ in range(2):
+            missing = [i for i, c in enumerate(rows) if c.get("price") is None]
+            if not missing:
+                break
+            for i in missing:
+                time.sleep(0.2)
+                rows[i] = _one(UNIVERSE[i])
+    if not any(c.get("price") is not None for c in rows):
+        return None
 
     def medians(items):
         return {m: _median([c.get(m) for c in items]) for m in MEDIAN_KEYS}

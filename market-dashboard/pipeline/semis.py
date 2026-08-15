@@ -115,15 +115,22 @@ def build_semis() -> dict | None:
         return None
     with ThreadPoolExecutor(max_workers=config.FETCH_WORKERS) as ex:
         companies = list(ex.map(_one, SEMI_TICKERS))
-    # Live-only: a couple of sequential retry passes for any name whose burst
-    # got transiently rate-limited, so all names fill from the API.
-    for _ in range(2):
-        missing = [i for i, c in enumerate(companies) if c.get("price") is None]
-        if not missing:
-            break
-        for i in missing:
-            time.sleep(0.3)
-            companies[i] = _one(SEMI_TICKERS[i])
+    # Retry stragglers ONLY when a minority is missing (transient rate-limiting).
+    # If most names came back empty, FMP is down / over-limit — skip the retries
+    # so a dead API fails fast instead of grinding through 100+ sequential calls.
+    missing = [i for i, c in enumerate(companies) if c.get("price") is None]
+    if missing and len(missing) <= len(companies) * 0.4:
+        for _ in range(2):
+            missing = [i for i, c in enumerate(companies) if c.get("price") is None]
+            if not missing:
+                break
+            for i in missing:
+                time.sleep(0.2)
+                companies[i] = _one(SEMI_TICKERS[i])
+    # If FMP returned nothing at all, treat the tab as unavailable (clean banner
+    # instead of a table of blanks).
+    if not any(c.get("price") is not None for c in companies):
+        return None
     companies.sort(key=lambda c: (c.get("market_cap") or 0), reverse=True)
     n = len(companies)
 

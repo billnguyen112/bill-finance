@@ -53,6 +53,7 @@ jobs:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FETCH_WORKERS: "10"   # parallelise the FRED/FMP fetches harder (~2x faster)
         run: python pipeline/run.py refresh
 
       - uses: actions/setup-node@v4
