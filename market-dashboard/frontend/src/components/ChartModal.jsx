@@ -55,6 +55,31 @@ function ExploreChart({ raw, unit, good }) {
     return () => ro.disconnect();
   }, []);
 
+  // Native cadence of the series (median gap between points, in days). A monthly
+  // series can't be shown as daily bars, so we only offer aggregations coarser
+  // than the data itself — otherwise Day/Week/Month look broken (they do nothing).
+  const cadence = useMemo(() => {
+    if (!raw || raw.length < 3) return 1;
+    const gaps = [];
+    for (let i = 1; i < raw.length; i++) gaps.push((new Date(raw[i][0]) - new Date(raw[i - 1][0])) / 86400000);
+    gaps.sort((a, b) => a - b);
+    return gaps[Math.floor(gaps.length / 2)];
+  }, [raw]);
+  const aggs = useMemo(() => (cadence <= 3 ? AGGS : cadence <= 10 ? AGGS.slice(1) : AGGS.slice(2)), [cadence]);
+  // Ranges that actually contain enough points for this cadence to be worth showing.
+  const ranges = useMemo(() => {
+    if (!raw || !raw.length) return RANGES;
+    const lastT = new Date(raw[raw.length - 1][0] + "T00:00:00").getTime();
+    return RANGES.filter(([, d]) => {
+      if (!d) return true;
+      const cs = new Date(lastT - d * 86400000).toISOString().slice(0, 10);
+      return raw.filter((p) => p[0] >= cs).length >= 3;
+    });
+  }, [raw]);
+  // keep the selected agg/range valid for this series
+  useEffect(() => { if (!aggs.some((a) => a[1] === agg)) setAgg(aggs[0][1]); }, [aggs]); // eslint-disable-line
+  useEffect(() => { if (!ranges.some((r) => r[0] === range)) setRange((ranges[ranges.length - 1] || ["Max"])[0]); }, [ranges]); // eslint-disable-line
+
   // filter by range (relative to the latest date), then resample
   const view = useMemo(() => {
     if (!raw || !raw.length) return [];
@@ -134,12 +159,12 @@ function ExploreChart({ raw, unit, good }) {
   return (
     <div ref={wrapRef} className="xc">
       <div className="xc-controls">
-        <div className="xc-grp">{RANGES.map(([l]) => (
+        <div className="xc-grp">{ranges.map(([l]) => (
           <button key={l} className={`xc-btn${range === l ? " on" : ""}`} onClick={() => setRange(l)}>{l}</button>
         ))}</div>
-        <div className="xc-grp">{AGGS.map(([l, a]) => (
+        {aggs.length > 1 && <div className="xc-grp">{aggs.map(([l, a]) => (
           <button key={a} className={`xc-btn${agg === a ? " on" : ""}`} onClick={() => setAgg(a)}>{l}</button>
-        ))}</div>
+        ))}</div>}
         {zoom && <button className="xc-btn reset" onClick={() => setZoom(null)}>⟲ reset zoom</button>}
       </div>
       <svg viewBox={`0 0 ${w} ${H}`} width="100%" height={H} className="xc-svg"
