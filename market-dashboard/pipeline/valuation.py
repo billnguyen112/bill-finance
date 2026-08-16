@@ -15,20 +15,16 @@ from datetime import date
 import config
 import sources
 
+# Trimmed to fit the FMP free-tier daily cap (each name costs ~5 calls).
 UNIVERSE = [
     # Semiconductors
     ("NVDA", "Nvidia", "Semiconductors"), ("TSM", "TSMC", "Semiconductors"),
     ("AVGO", "Broadcom", "Semiconductors"), ("AMD", "AMD", "Semiconductors"),
-    ("ASML", "ASML", "Semiconductors"), ("QCOM", "Qualcomm", "Semiconductors"),
-    ("TXN", "Texas Instruments", "Semiconductors"), ("MU", "Micron", "Semiconductors"),
-    ("AMAT", "Applied Materials", "Semiconductors"), ("LRCX", "Lam Research", "Semiconductors"),
-    ("KLAC", "KLA", "Semiconductors"), ("ARM", "Arm Holdings", "Semiconductors"),
+    ("ASML", "ASML", "Semiconductors"), ("MU", "Micron", "Semiconductors"),
     # Big Tech / Software
-    ("AAPL", "Apple", "Big Tech"), ("MSFT", "Microsoft", "Big Tech"),
-    ("GOOGL", "Alphabet", "Big Tech"), ("AMZN", "Amazon", "Big Tech"),
-    ("META", "Meta", "Big Tech"), ("ORCL", "Oracle", "Big Tech"),
-    ("NFLX", "Netflix", "Big Tech"), ("CRM", "Salesforce", "Big Tech"),
-    ("ADBE", "Adobe", "Big Tech"), ("PLTR", "Palantir", "Big Tech"),
+    ("MSFT", "Microsoft", "Big Tech"), ("GOOGL", "Alphabet", "Big Tech"),
+    ("AMZN", "Amazon", "Big Tech"), ("META", "Meta", "Big Tech"),
+    ("ORCL", "Oracle", "Big Tech"), ("PLTR", "Palantir", "Big Tech"),
 ]
 MULTIPLES = ("pe", "fwd_pe", "fwd_pe_2028", "pb", "ps", "ev_ebitda")
 MEDIAN_KEYS = MULTIPLES + ("gross_margin", "op_margin", "fcf_ni")

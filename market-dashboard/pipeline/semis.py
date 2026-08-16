@@ -17,32 +17,21 @@ import config
 import sources
 
 # (ticker, group) — the AI/semiconductor complex, categorised like the watchlist.
-# Names are pulled live from FMP so the list stays low-maintenance.
+# Trimmed to the marquee names per group so the whole build stays under the FMP
+# free-tier daily call cap (250/day). Each name costs ~5 FMP calls.
 SEMI_TICKERS = [
     # Compute — chip designers
-    ("NVDA", "Compute"), ("AVGO", "Compute"), ("AMD", "Compute"), ("ARM", "Compute"),
-    ("QCOM", "Compute"), ("MRVL", "Compute"), ("INTC", "Compute"), ("MU", "Compute"),
-    ("TXN", "Compute"), ("NXPI", "Compute"), ("MCHP", "Compute"), ("ADI", "Compute"),
-    ("ON", "Compute"), ("MPWR", "Compute"), ("LSCC", "Compute"),
+    ("NVDA", "Compute"), ("AVGO", "Compute"), ("AMD", "Compute"), ("MU", "Compute"),
     # Fab & Equipment — foundry + semicap
-    ("TSM", "Fab & Equipment"), ("GFS", "Fab & Equipment"), ("TSEM", "Fab & Equipment"),
-    ("AMAT", "Fab & Equipment"), ("KLAC", "Fab & Equipment"), ("LRCX", "Fab & Equipment"),
-    ("ASML", "Fab & Equipment"), ("CAMT", "Fab & Equipment"), ("ONTO", "Fab & Equipment"),
-    ("ACMR", "Fab & Equipment"), ("NVMI", "Fab & Equipment"), ("ENTG", "Fab & Equipment"),
-    ("AEHR", "Fab & Equipment"),
+    ("TSM", "Fab & Equipment"), ("ASML", "Fab & Equipment"), ("AMAT", "Fab & Equipment"),
     # EDA & IP
-    ("SNPS", "EDA & IP"), ("CDNS", "EDA & IP"), ("ANSS", "EDA & IP"), ("RMBS", "EDA & IP"),
+    ("SNPS", "EDA & IP"), ("CDNS", "EDA & IP"),
     # Connectivity & optical
-    ("CRDO", "Connectivity"), ("COHR", "Connectivity"), ("CIEN", "Connectivity"),
-    ("FN", "Connectivity"), ("ALAB", "Connectivity"), ("POET", "Connectivity"),
-    ("APH", "Connectivity"), ("SITM", "Connectivity"),
+    ("CRDO", "Connectivity"), ("ALAB", "Connectivity"),
     # Datacenter & AI cloud
-    ("CRWV", "Datacenter"), ("NBIS", "Datacenter"), ("ORCL", "Datacenter"),
-    ("APLD", "Datacenter"), ("MSFT", "Datacenter"), ("VRT", "Datacenter"), ("SMCI", "Datacenter"),
+    ("ORCL", "Datacenter"), ("VRT", "Datacenter"), ("SMCI", "Datacenter"),
     # Power & nuclear
-    ("VST", "Power & Nuclear"), ("CEG", "Power & Nuclear"), ("GEV", "Power & Nuclear"),
-    ("TLN", "Power & Nuclear"), ("NRG", "Power & Nuclear"), ("OKLO", "Power & Nuclear"),
-    ("SMR", "Power & Nuclear"), ("BWXT", "Power & Nuclear"), ("CCJ", "Power & Nuclear"),
+    ("VST", "Power & Nuclear"), ("CEG", "Power & Nuclear"), ("OKLO", "Power & Nuclear"),
 ]
 GROUP_ORDER = ["Compute", "Fab & Equipment", "EDA & IP", "Connectivity", "Datacenter", "Power & Nuclear"]
 # Groups that count as actual semiconductors for the semi-specific buy/sell signals.
